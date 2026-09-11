@@ -1,0 +1,827 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { Sidebar } from './components/layout/Sidebar';
+import { WelcomeScreen } from './components/chat/WelcomeScreen';
+import { ChatMessage } from './components/chat/ChatMessage';
+import { ChatComposer } from './components/chat/ChatComposer';
+import { CsatModal } from './components/chat/CsatModal';
+import { SearchModal } from './components/chat/SearchModal';
+import { AuthPage } from './components/auth/AuthPage';
+import { OperatorWorkspace } from './components/operator/OperatorWorkspace';
+import { ChatSession, Message } from './types/chat';
+import { UserProfile } from './types/auth';
+import {
+  streamChatMessage,
+  fetchChatState,
+  escalateTicket,
+  resolveTicket,
+  submitFeedback,
+  subscribeChatEvents,
+} from './services/api';
+import { getStoredUser, clearStoredAuth, fetchCurrentUser } from './services/auth';
+import { Sparkles, ShieldCheck, Headphones, UserCheck } from 'lucide-react';
+
+export const App: React.FC = () => {
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [user, setUser] = useState<UserProfile | null>(() => getStoredUser());
+  const [viewMode, setViewMode] = useState<'client' | 'operator'>(() => {
+    const storedUser = getStoredUser();
+    if (storedUser?.role_code === 'operator' || storedUser?.role_code === 'supervisor') {
+      return 'operator';
+    }
+    return 'client';
+  });
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [inputValue, setInputValue] = useState('');
+  const [isSending, setIsSending] = useState(false);
+
+  // Состояние активного обращения и оператора
+  const [activeTicketId, setActiveTicketId] = useState<string | null>(null);
+  const [operatorName, setOperatorName] = useState<string | null>(null);
+  const [feedbackTicketId, setFeedbackTicketId] = useState<string | null>(null);
+
+  const [isCsatModalOpen, setIsCsatModalOpen] = useState(false);
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const activeSession = sessions.find((s) => s.id === activeSessionId) || null;
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [activeSession?.messages, isSending]);
+
+  // Проверка сессии при монтировании
+  useEffect(() => {
+    fetchCurrentUser().then((currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+        if (
+          currentUser.role_code === 'operator' ||
+          currentUser.role_code === 'supervisor' ||
+          currentUser.role_code === 'admin'
+        ) {
+          setViewMode('operator');
+        } else {
+          setViewMode('client');
+        }
+      } else {
+        setUser(null);
+      }
+    });
+  }, []);
+
+  // Загрузка реального состояния чата с бэкенда при входе клиента
+  useEffect(() => {
+    if (user && user.role_code === 'client') {
+      fetchChatState().then((state) => {
+        if (state) {
+          if (state.active_ticket) {
+            setActiveTicketId(state.active_ticket.id);
+            if (state.active_ticket.assigned_operator_name) {
+              setOperatorName(state.active_ticket.assigned_operator_name);
+            }
+          }
+          if (state.feedback_ticket_id) {
+            setFeedbackTicketId(state.feedback_ticket_id);
+          }
+
+          // Группируем сообщения по ticket_id
+          const ticketMap = new Map<string, Message[]>();
+          const ticketOrder: string[] = [];
+
+          for (const m of state.messages) {
+            const tId = m.ticket_id || state.active_ticket?.id || state.chat_id;
+            if (!ticketMap.has(tId)) {
+              ticketMap.set(tId, []);
+              ticketOrder.push(tId);
+            }
+            const frontendMsg: Message = {
+              id: m.id,
+              ticket_id: tId,
+              content: m.text,
+              type:
+                m.sender_type === 'client'
+                  ? 'user'
+                  : m.sender_type === 'system'
+                  ? 'system'
+                  : 'assistant',
+              sender_type: m.sender_type,
+              timestamp: new Date(m.created_at).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+              actions:
+                m.sender_type === 'client'
+                  ? ['copy', 'edit']
+                  : ['copy', 'thumbs_up', 'thumbs_down'],
+              needsFeedbackButtons:
+                m.sender_type === 'bot' &&
+                state.active_ticket?.id === tId &&
+                state.active_ticket?.status === 'bot_processing',
+              citations: m.sources?.map((s, idx) => ({
+                id: s.chunk_id || `c-${idx}`,
+                title: s.doc_id || 'Регламент Портала',
+                sectionPath: s.doc_id,
+                excerpt: s.quote_text,
+              })),
+            };
+            ticketMap.get(tId)!.push(frontendMsg);
+          }
+
+          // Если есть активный тикет без сообщений, добавляем его в список
+          if (state.active_ticket && !ticketMap.has(state.active_ticket.id)) {
+            ticketMap.set(state.active_ticket.id, []);
+            ticketOrder.unshift(state.active_ticket.id);
+          }
+
+          const loadedSessions: ChatSession[] = ticketOrder.map((tId) => {
+            const msgs = ticketMap.get(tId) || [];
+            const firstUserMsg = msgs.find((m) => m.type === 'user');
+            const title = firstUserMsg
+              ? firstUserMsg.content.slice(0, 38) + (firstUserMsg.content.length > 38 ? '...' : '')
+              : 'Консультация по регламенту';
+
+            const isActive = state.active_ticket && tId === state.active_ticket.id;
+            const status = isActive
+              ? state.active_ticket?.status === 'resolved'
+                ? 'resolved'
+                : state.active_ticket?.status === 'in_progress' ||
+                  state.active_ticket?.status === 'assigned'
+                ? 'escalated_to_operator'
+                : 'active'
+              : 'resolved';
+
+            return {
+              id: tId,
+              title,
+              category: 'general',
+              createdAt: 'Сегодня',
+              updatedAt: new Date().toISOString(),
+              status,
+              messages: msgs,
+            };
+          });
+
+          // Сортируем: активный тикет или самый свежий сверху
+          if (state.active_ticket) {
+            loadedSessions.sort((a, b) =>
+              a.id === state.active_ticket?.id ? -1 : b.id === state.active_ticket?.id ? 1 : 0
+            );
+          }
+
+          setSessions(loadedSessions);
+
+          setActiveSessionId((prev) => {
+            if (prev && loadedSessions.some((s) => s.id === prev)) {
+              return prev;
+            }
+            if (state.active_ticket?.id && loadedSessions.some((s) => s.id === state.active_ticket?.id)) {
+              return state.active_ticket.id;
+            }
+            return loadedSessions.length > 0 ? loadedSessions[0].id : null;
+          });
+        }
+      });
+    }
+  }, [user]);
+
+  // Подписка на Server-Sent Events (SSE) активного обращения
+  useEffect(() => {
+    if (!user || user.role_code !== 'client') return;
+    if (!activeTicketId) return;
+
+    const unsubscribe = subscribeChatEvents(activeTicketId, (event, data) => {
+      console.log('Client SSE event received:', event, data);
+
+      if (event === 'operator_joined') {
+        const opName = data.operator_name || 'Специалист поддержки';
+        setOperatorName(opName);
+
+        const joinedMessage: Message = {
+          id: `op-join-${Date.now()}`,
+          content: `К диалогу подключился специалист поддержки: ${opName}`,
+          type: 'system',
+          sender_type: 'system',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          actions: [],
+        };
+
+        const targetTicketId = data.ticket_id || activeTicketId;
+        setSessions((prev) =>
+          prev.map((s) =>
+            !targetTicketId || s.id === targetTicketId
+              ? {
+                  ...s,
+                  status: 'escalated_to_operator',
+                  messages: [...s.messages, joinedMessage],
+                }
+              : s
+          )
+        );
+      } else if (event === 'new_message') {
+        const targetTicketId = data.ticket_id || activeTicketId;
+        const newMsg: Message = {
+          id: data.id || `msg-${Date.now()}`,
+          ticket_id: targetTicketId || undefined,
+          content: data.text || '',
+          type: data.sender_type === 'operator' ? 'assistant' : 'system',
+          sender_type: data.sender_type || 'operator',
+          timestamp: new Date(data.created_at || Date.now()).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+          actions: ['copy'],
+        };
+
+        setSessions((prev) =>
+          prev.map((s) =>
+            !targetTicketId || s.id === targetTicketId
+              ? {
+                  ...s,
+                  messages: [...s.messages, newMsg],
+                }
+              : s
+          )
+        );
+      } else if (event === 'ticket_resolved') {
+        const targetTicketId = data.ticket_id || activeTicketId;
+        if (data.ticket_id) {
+          setFeedbackTicketId(data.ticket_id);
+        }
+        setSessions((prev) =>
+          prev.map((s) =>
+            !targetTicketId || s.id === targetTicketId
+              ? {
+                  ...s,
+                  status: 'resolved',
+                }
+              : s
+          )
+        );
+        setIsCsatModalOpen(true);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [user, activeTicketId]);
+
+  const handleNewChat = () => {
+    setActiveSessionId(null);
+    setActiveTicketId(null);
+    setInputValue('');
+  };
+
+  const handleSend = async (customPrompt?: string) => {
+    const textToSend = (customPrompt || inputValue).trim();
+    if (!textToSend || isSending) return;
+
+    const userMessage: Message = {
+      id: `usr-${Date.now()}`,
+      content: textToSend,
+      type: 'user',
+      sender_type: 'client',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      actions: ['copy', 'edit'],
+    };
+
+    const botMessageId = `bot-${Date.now()}`;
+    const thinkingMessage: Message = {
+      id: botMessageId,
+      content: '',
+      type: 'thinking',
+      sender_type: 'bot',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      actions: [],
+      statusText: 'Поиск по базе регламентов...',
+    };
+
+    let targetSessionId = activeSessionId;
+    const isNewChat = !targetSessionId;
+
+    if (!targetSessionId) {
+      // Create new session
+      const newSessionId = `session-${Date.now()}`;
+      targetSessionId = newSessionId;
+      const newSession: ChatSession = {
+        id: newSessionId,
+        title: textToSend.slice(0, 38) + (textToSend.length > 38 ? '...' : ''),
+        category: 'general',
+        createdAt: 'Сегодня',
+        updatedAt: new Date().toISOString(),
+        status: 'active',
+        messages: [userMessage, thinkingMessage],
+      };
+
+      setSessions((prev) => [newSession, ...prev]);
+      setActiveSessionId(newSessionId);
+    } else {
+      // Append to active session
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === targetSessionId
+            ? { ...s, messages: [...s.messages, userMessage, thinkingMessage] }
+            : s
+        )
+      );
+    }
+
+    setInputValue('');
+    setIsSending(true);
+
+    // Call live SSE / streaming service
+    try {
+      await streamChatMessage(
+        {
+          chatId: targetSessionId,
+          ticketId: isNewChat ? undefined : targetSessionId,
+          newTicket: isNewChat,
+          content: textToSend,
+        },
+        {
+          onStatus: (statusText) => {
+            setSessions((prev) =>
+              prev.map((s) => {
+                if (s.id !== targetSessionId) return s;
+                return {
+                  ...s,
+                  messages: s.messages.map((m) =>
+                    m.id === botMessageId ? { ...m, statusText } : m
+                  ),
+                };
+              })
+            );
+          },
+          onSources: (citations) => {
+            setSessions((prev) =>
+              prev.map((s) => {
+                if (s.id !== targetSessionId) return s;
+                return {
+                  ...s,
+                  messages: s.messages.map((m) =>
+                    m.id === botMessageId ? { ...m, citations } : m
+                  ),
+                };
+              })
+            );
+          },
+          onChunk: (chunk) => {
+            setSessions((prev) =>
+              prev.map((s) => {
+                if (s.id !== targetSessionId) return s;
+                return {
+                  ...s,
+                  messages: s.messages.map((m) =>
+                    m.id === botMessageId
+                      ? {
+                          ...m,
+                          type: 'assistant',
+                          sender_type: 'bot',
+                          isStreaming: true,
+                          content: m.content + chunk,
+                        }
+                      : m
+                  ),
+                };
+              })
+            );
+          },
+          onDone: (fullText, messageId, ticketId) => {
+            const resolvedTicketId = ticketId || (isNewChat ? undefined : targetSessionId);
+            if (resolvedTicketId) {
+              setActiveTicketId(resolvedTicketId);
+            }
+            setSessions((prev) =>
+              prev.map((s) => {
+                if (s.id !== targetSessionId && s.id !== resolvedTicketId) return s;
+                return {
+                  ...s,
+                  id: resolvedTicketId || s.id,
+                  messages: s.messages.map((m) =>
+                    m.id === botMessageId
+                      ? {
+                          ...m,
+                          id: messageId || m.id,
+                          ticket_id: resolvedTicketId || m.ticket_id,
+                          type: 'assistant',
+                          sender_type: 'bot',
+                          isStreaming: false,
+                          content: fullText || m.content,
+                          actions: ['copy', 'regenerate', 'thumbs_up', 'thumbs_down'],
+                          needsFeedbackButtons: true,
+                        }
+                      : { ...m, ticket_id: resolvedTicketId || m.ticket_id }
+                  ),
+                };
+              })
+            );
+            if (resolvedTicketId && targetSessionId !== resolvedTicketId) {
+              setActiveSessionId(resolvedTicketId);
+            }
+            setIsSending(false);
+          },
+          onSessionTerminated: (_reason, message) => {
+            setSessions((prev) =>
+              prev.map((s) => {
+                if (s.id !== targetSessionId) return s;
+                return {
+                  ...s,
+                  status: 'moderation_closed',
+                  messages: [
+                    ...s.messages.filter((m) => m.id !== botMessageId),
+                    {
+                      id: `mod-${Date.now()}`,
+                      content: message || 'Обращение закрыто по правилам регламента.',
+                      type: 'system',
+                      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                      actions: [],
+                    },
+                  ],
+                };
+              })
+            );
+            setIsSending(false);
+          },
+        }
+      );
+    } catch (err: unknown) {
+      const errMsg =
+        err instanceof Error
+          ? err.message
+          : 'Произошла непредвиденная ошибка связи с сервисом.';
+
+      if (
+        errMsg.includes('Сессия истекла') ||
+        errMsg.includes('необходимо войти')
+      ) {
+        setUser(null);
+      }
+
+      const errorMessage: Message = {
+        id: `err-${Date.now()}`,
+        content: errMsg,
+        type: 'system',
+        timestamp: new Date().toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        actions: [],
+      };
+
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === targetSessionId
+            ? {
+                ...s,
+                messages: [
+                  ...s.messages.filter((m) => m.id !== botMessageId),
+                  errorMessage,
+                ],
+              }
+            : s
+        )
+      );
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleResolveTicket = async () => {
+    let targetTicketId = activeTicketId;
+    if (!targetTicketId) {
+      const state = await fetchChatState();
+      if (state?.active_ticket) {
+        targetTicketId = state.active_ticket.id;
+        setActiveTicketId(targetTicketId);
+      }
+    }
+
+    if (targetTicketId) {
+      try {
+        await resolveTicket(targetTicketId);
+        setFeedbackTicketId(targetTicketId);
+      } catch (err) {
+        console.error('Failed to resolve ticket on backend:', err);
+      }
+    }
+
+    setIsCsatModalOpen(true);
+    if (activeSessionId) {
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === activeSessionId ? { ...s, status: 'resolved' } : s
+        )
+      );
+    }
+  };
+
+  const handleEscalateToOperator = async () => {
+    if (!activeSessionId) return;
+    if (
+      activeSession?.status === 'escalated_to_operator' ||
+      activeSession?.status === 'resolved'
+    ) {
+      return;
+    }
+
+    try {
+      const summary = await escalateTicket();
+      if (summary.id) {
+        setActiveTicketId(summary.id);
+      }
+      if (summary.assigned_operator_name) {
+        setOperatorName(summary.assigned_operator_name);
+      }
+    } catch (err: any) {
+      console.warn('Escalation API notice:', err.message || err);
+    }
+
+    const operatorMessage: Message = {
+      id: `sys-op-${Date.now()}`,
+      content:
+        'Диалог переведен на профильную линию поддержки («Регламенты и сопровождение процедур»). Оператор подключится в ближайшее время. Слот обращения зафиксирован в очереди.',
+      type: 'system',
+      timestamp: new Date().toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+      actions: [],
+    };
+
+    setSessions((prev) =>
+      prev.map((s) =>
+        s.id === activeSessionId
+          ? {
+              ...s,
+              status: 'escalated_to_operator',
+              messages: [...s.messages, operatorMessage],
+            }
+          : s
+      )
+    );
+  };
+
+  const handleEditMessage = (msgId: string, newContent: string) => {
+    if (!activeSessionId) return;
+
+    setSessions((prev) =>
+      prev.map((s) => {
+        if (s.id !== activeSessionId) return s;
+        return {
+          ...s,
+          messages: s.messages.map((m) =>
+            m.id === msgId ? { ...m, content: newContent } : m
+          ),
+        };
+      })
+    );
+
+    handleSend(newContent);
+  };
+
+  // Обязательный экран авторизации для неавторизованных посетителей
+  if (!user) {
+    return (
+      <div className="h-dvh w-full overflow-hidden">
+        <AuthPage
+          onSuccess={(authedUser) => {
+            setUser(authedUser);
+            if (
+              authedUser.role_code === 'operator' ||
+              authedUser.role_code === 'supervisor' ||
+              authedUser.role_code === 'admin'
+            ) {
+              setViewMode('operator');
+            } else {
+              setViewMode('client');
+            }
+          }}
+        />
+      </div>
+    );
+  }
+
+  if (viewMode === 'operator') {
+    return (
+      <div className="h-dvh w-full overflow-hidden">
+        <OperatorWorkspace
+          user={user}
+          onLogout={() => {
+            clearStoredAuth();
+            setUser(null);
+            setViewMode('client');
+          }}
+          onSwitchToClientMode={() => setViewMode('client')}
+        />
+        {isAuthOpen && (
+          <AuthPage
+            onSuccess={(authedUser) => {
+              setUser(authedUser);
+              setIsAuthOpen(false);
+              if (authedUser.role_code === 'operator' || authedUser.role_code === 'supervisor') {
+                setViewMode('operator');
+              }
+            }}
+            onCancel={() => setIsAuthOpen(false)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-dvh w-full bg-[#f9fafb] text-text-50 font-['Inter',sans-serif] overflow-hidden">
+      {/* Collapsible Sidebar matching TailGrids */}
+      <Sidebar
+        isCollapsed={isCollapsed}
+        onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        onSelectSession={(id) => {
+          setActiveSessionId(id);
+          setActiveTicketId(id);
+        }}
+        onNewChat={handleNewChat}
+        onOpenSearch={() => setIsSearchModalOpen(true)}
+        user={user}
+        onOpenAuth={() => setIsAuthOpen(true)}
+        onLogout={() => {
+          clearStoredAuth();
+          setUser(null);
+        }}
+        onSwitchToOperatorMode={
+          user?.role_code === 'operator' || user?.role_code === 'supervisor' || user?.role_code === 'admin'
+            ? () => setViewMode('operator')
+            : undefined
+        }
+      />
+
+      {/* Main Workspace Container */}
+      <main className="flex-1 flex flex-col h-full overflow-hidden p-2 md:p-3">
+        <div className="flex-1 flex flex-col bg-white rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)] overflow-hidden relative">
+          {/* Top Bar for active chat */}
+          {activeSession && (
+            <header className="px-6 py-3.5 border-b border-gray-100 flex items-center justify-between shrink-0 bg-white/80 backdrop-blur-xs z-10">
+              <div className="flex items-center gap-3 overflow-hidden">
+                <div className="size-8 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center shrink-0">
+                  <Sparkles className="size-4" />
+                </div>
+                <div className="truncate">
+                  <h2 className="text-sm font-semibold text-title-50 truncate">
+                    {activeSession.title}
+                  </h2>
+                  <div className="flex items-center gap-2 text-xs text-text-100">
+                    <span className="flex items-center gap-1">
+                      <ShieldCheck className="size-3 text-emerald-500" />
+                      {activeSession.status === 'resolved'
+                        ? 'Вопрос решен'
+                        : activeSession.status === 'escalated_to_operator'
+                        ? 'На линии оператора'
+                        : 'ИИ-Консультация активна'}
+                    </span>
+                    <span>•</span>
+                    <span>{activeSession.messages.length} сообщений</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Action in header */}
+              {activeSession.status === 'active' && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleEscalateToOperator}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 border border-gray-200 transition cursor-pointer"
+                  >
+                    <Headphones className="size-3.5 text-primary-500" />
+                    <span className="hidden sm:inline">Вызвать оператора</span>
+                  </button>
+                </div>
+              )}
+
+              {activeSession.status === 'escalated_to_operator' && (
+                operatorName ? (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
+                    <UserCheck className="size-3.5 text-emerald-600" />
+                    <span>Специалист: <strong>{operatorName}</strong></span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                    <Headphones className="size-3.5 text-amber-600" />
+                    <span>В очереди к оператору</span>
+                  </div>
+                )
+              )}
+            </header>
+          )}
+
+          {/* Connected Operator Banner inside chat */}
+          {activeSession && operatorName && activeSession.status === 'escalated_to_operator' && (
+            <div className="bg-primary-50/70 border-b border-primary-100/80 px-6 py-2 flex items-center justify-between text-xs text-primary-900">
+              <div className="flex items-center gap-2">
+                <UserCheck className="size-4 text-primary-600" />
+                <span>К вашему диалогу подключен специалист службы поддержки: <strong>{operatorName}</strong></span>
+              </div>
+              <span className="text-[11px] text-primary-600/80 font-medium">Регламентная линия L1</span>
+            </div>
+          )}
+
+          {/* Body Content Area */}
+          {!activeSession || activeSession.messages.length === 0 ? (
+            <WelcomeScreen
+              inputValue={inputValue}
+              onInputChange={setInputValue}
+              onSend={() => handleSend()}
+              isSending={isSending}
+              onSelectQuickPrompt={(prompt) => {
+                setInputValue(prompt);
+                handleSend(prompt);
+              }}
+            />
+          ) : (
+            <div className="flex-1 flex flex-col h-full overflow-hidden">
+              {/* Messages Scroll Area */}
+              <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 custom-scrollbar space-y-2">
+                <div className="w-full max-w-4xl mx-auto space-y-2 min-w-0">
+                  {activeSession.messages.map((message) => (
+                    <ChatMessage
+                      key={message.id}
+                      message={message}
+                      onEditMessage={handleEditMessage}
+                      onRegenerate={() => handleSend(message.content)}
+                      onResolveTicket={handleResolveTicket}
+                      onEscalateToOperator={handleEscalateToOperator}
+                      isEscalated={activeSession.status === 'escalated_to_operator'}
+                    />
+                  ))}
+                  <div ref={messagesEndRef} />
+                </div>
+              </div>
+
+              {/* Sticky Bottom Composer */}
+              <div className="p-4 border-t border-gray-100/80 bg-white/90 backdrop-blur-xs">
+                <ChatComposer
+                  variant="bottom"
+                  inputValue={inputValue}
+                  onInputChange={setInputValue}
+                  onSend={() => handleSend()}
+                  isSending={isSending}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* CSAT Modal */}
+      <CsatModal
+        isOpen={isCsatModalOpen}
+        onClose={() => setIsCsatModalOpen(false)}
+        onSubmit={async (score, comment, category) => {
+          const targetTicketId = feedbackTicketId || activeTicketId;
+          if (targetTicketId) {
+            try {
+              await submitFeedback(
+                targetTicketId,
+                score,
+                comment || (category ? `Категория: ${category}` : undefined)
+              );
+              setFeedbackTicketId(null);
+            } catch (err) {
+              console.error('Failed to submit feedback to backend:', err);
+            }
+          }
+        }}
+      />
+
+      {/* Search Modal */}
+      <SearchModal
+        isOpen={isSearchModalOpen}
+        onClose={() => setIsSearchModalOpen(false)}
+        sessions={sessions}
+        onSelectSession={(id) => setActiveSessionId(id)}
+      />
+
+      {/* Auth Modal / Page */}
+      {isAuthOpen && (
+        <AuthPage
+          onSuccess={(authedUser) => {
+            setUser(authedUser);
+            setIsAuthOpen(false);
+            if (authedUser.role_code === 'operator' || authedUser.role_code === 'supervisor') {
+              setViewMode('operator');
+            }
+          }}
+          onCancel={() => setIsAuthOpen(false)}
+        />
+      )}
+    </div>
+  );
+};
