@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   SquarePen,
   Search,
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { ChatSession } from '../../types/chat';
 import { UserProfile } from '../../types/auth';
+import { isStandaloneMode, setStandaloneMode, onModeChange } from '../../config/mode';
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -41,6 +42,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLogout,
   onSwitchToOperatorMode,
 }) => {
+  const [standalone, setStandalone] = useState(() => isStandaloneMode());
+
+  useEffect(() => {
+    return onModeChange((s) => setStandalone(s));
+  }, []);
+
   return (
     <aside
       className={`relative flex flex-col bg-white border-r border-gray-100 transition-all duration-300 h-dvh select-none z-30 shrink-0 ${
@@ -114,6 +121,60 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         )}
       </div>
+
+      {/* Mode Switcher Badge */}
+      {!isCollapsed ? (
+        <div className="px-3 pb-2">
+          <div className="flex items-center justify-between p-2 rounded-xl bg-gray-50/80 border border-gray-200/60 text-xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <span
+                className={`size-2 rounded-full shrink-0 ${
+                  standalone ? 'bg-blue-500' : 'bg-emerald-500'
+                }`}
+              />
+              <div className="truncate">
+                <span className="text-[11px] font-semibold text-gray-800 block truncate">
+                  {standalone ? 'Автономный режим' : 'Режим API (Бэкенд)'}
+                </span>
+                <span className="text-[9px] text-gray-400 block truncate">
+                  {standalone ? 'Визуал без API/БД' : 'Сервер подключен'}
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setStandaloneMode(!standalone)}
+              title={
+                standalone
+                  ? 'Переключить на реальный бэкенд'
+                  : 'Переключить в автономный визуальный режим'
+              }
+              className="text-[10px] text-primary-600 hover:text-primary-800 font-semibold px-2 py-1 rounded-lg hover:bg-primary-50 transition cursor-pointer shrink-0"
+            >
+              {standalone ? 'К API' : 'В Демо'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex justify-center pb-2">
+          <button
+            type="button"
+            onClick={() => setStandaloneMode(!standalone)}
+            title={
+              standalone
+                ? 'Автономный режим (кликните для переключения на API)'
+                : 'Режим API (кликните для переключения в Демо)'
+            }
+            className="p-1 rounded-md hover:bg-gray-100 transition cursor-pointer"
+          >
+            <span
+              className={`size-2.5 rounded-full inline-block ${
+                standalone ? 'bg-blue-500' : 'bg-emerald-500'
+              }`}
+            />
+          </button>
+        </div>
+      )}
 
       {/* Scrollable Content: History */}
       <div className="flex-1 overflow-y-auto px-3 py-2 custom-scrollbar space-y-6">

@@ -5,7 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:standalone": "vite --mode standalone",
+    "dev:mock": "vite --mode standalone",
+    "dev:api": "vite --mode development",
     "build": "tsc -b && vite build",
+    "build:standalone": "tsc -b && vite build --mode standalone",
+    "build:api": "tsc -b && vite build --mode production",
     "preview": "vite preview"
   },
   "dependencies": {

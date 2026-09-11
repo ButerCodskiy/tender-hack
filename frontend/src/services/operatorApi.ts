@@ -6,6 +6,7 @@ import {
 } from '../types/operator';
 import { Message } from '../types/chat';
 import { getStoredTokens } from './auth';
+import { isStandaloneMode } from '../config/mode';
 
 const STORAGE_SHIFT_KEY = 'portal_operator_shift';
 const STORAGE_TICKETS_KEY = 'portal_operator_tickets';
@@ -218,17 +219,19 @@ function saveLocalWorkspaces(workspaces: Record<string, OperatorTicketWorkspace>
 }
 
 export async function getOperatorShift(): Promise<OperatorProfile> {
-  try {
-    const tokens = getStoredTokens();
-    const res = await fetch('/api/v1/operators/me/shift', {
-      headers: {
-        Authorization: tokens?.access_token ? `Bearer ${tokens.access_token}` : '',
-      },
-    });
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch {}
+  if (!isStandaloneMode()) {
+    try {
+      const tokens = getStoredTokens();
+      const res = await fetch('/api/v1/operators/me/shift', {
+        headers: {
+          Authorization: tokens?.access_token ? `Bearer ${tokens.access_token}` : '',
+        },
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {}
+  }
 
   const rawShift = localStorage.getItem(STORAGE_SHIFT_KEY) as ShiftStatus | null;
   return {
@@ -238,20 +241,22 @@ export async function getOperatorShift(): Promise<OperatorProfile> {
 }
 
 export async function updateOperatorShift(shift_status: ShiftStatus): Promise<OperatorProfile> {
-  try {
-    const tokens = getStoredTokens();
-    const res = await fetch('/api/v1/operators/me/shift', {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: tokens?.access_token ? `Bearer ${tokens.access_token}` : '',
-      },
-      body: JSON.stringify({ shift_status }),
-    });
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch {}
+  if (!isStandaloneMode()) {
+    try {
+      const tokens = getStoredTokens();
+      const res = await fetch('/api/v1/operators/me/shift', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: tokens?.access_token ? `Bearer ${tokens.access_token}` : '',
+        },
+        body: JSON.stringify({ shift_status }),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {}
+  }
 
   localStorage.setItem(STORAGE_SHIFT_KEY, shift_status);
   return {
@@ -261,17 +266,19 @@ export async function updateOperatorShift(shift_status: ShiftStatus): Promise<Op
 }
 
 export async function getOperatorTickets(): Promise<OperatorSidebarTicket[]> {
-  try {
-    const tokens = getStoredTokens();
-    const res = await fetch('/api/v1/operators/tickets', {
-      headers: {
-        Authorization: tokens?.access_token ? `Bearer ${tokens.access_token}` : '',
-      },
-    });
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch {}
+  if (!isStandaloneMode()) {
+    try {
+      const tokens = getStoredTokens();
+      const res = await fetch('/api/v1/operators/tickets', {
+        headers: {
+          Authorization: tokens?.access_token ? `Bearer ${tokens.access_token}` : '',
+        },
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {}
+  }
 
   return getLocalStoredTickets();
 }
@@ -312,22 +319,24 @@ function mapOperatorMessage(m: any): Message {
 }
 
 export async function openTicketWorkspace(ticketId: string): Promise<OperatorTicketWorkspace> {
-  try {
-    const tokens = getStoredTokens();
-    const res = await fetch(`/api/v1/operators/tickets/${ticketId}/open`, {
-      method: 'POST',
-      headers: {
-        Authorization: tokens?.access_token ? `Bearer ${tokens.access_token}` : '',
-      },
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return {
-        ...data,
-        messages: (data.messages || []).map(mapOperatorMessage),
-      };
-    }
-  } catch {}
+  if (!isStandaloneMode()) {
+    try {
+      const tokens = getStoredTokens();
+      const res = await fetch(`/api/v1/operators/tickets/${ticketId}/open`, {
+        method: 'POST',
+        headers: {
+          Authorization: tokens?.access_token ? `Bearer ${tokens.access_token}` : '',
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return {
+          ...data,
+          messages: (data.messages || []).map(mapOperatorMessage),
+        };
+      }
+    } catch {}
+  }
 
   const workspaces = getLocalWorkspaces();
   const ws = workspaces[ticketId];
@@ -348,21 +357,23 @@ export async function openTicketWorkspace(ticketId: string): Promise<OperatorTic
 }
 
 export async function sendOperatorMessage(ticketId: string, text: string): Promise<OperatorTicketWorkspace> {
-  try {
-    const tokens = getStoredTokens();
-    const res = await fetch(`/api/v1/operators/tickets/${ticketId}/messages`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: tokens?.access_token ? `Bearer ${tokens.access_token}` : '',
-      },
-      body: JSON.stringify({ text }),
-    });
-    if (res.ok) {
-      // Refresh workspace
-      return await openTicketWorkspace(ticketId);
-    }
-  } catch {}
+  if (!isStandaloneMode()) {
+    try {
+      const tokens = getStoredTokens();
+      const res = await fetch(`/api/v1/operators/tickets/${ticketId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: tokens?.access_token ? `Bearer ${tokens.access_token}` : '',
+        },
+        body: JSON.stringify({ text }),
+      });
+      if (res.ok) {
+        // Refresh workspace
+        return await openTicketWorkspace(ticketId);
+      }
+    } catch {}
+  }
 
   const workspaces = getLocalWorkspaces();
   const ws = workspaces[ticketId];
@@ -399,20 +410,22 @@ export async function transferTicket(
   targetLineCode: string,
   comment?: string
 ): Promise<void> {
-  try {
-    const tokens = getStoredTokens();
-    await fetch(`/api/v1/operators/tickets/${ticketId}/transfer`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: tokens?.access_token ? `Bearer ${tokens.access_token}` : '',
-      },
-      body: JSON.stringify({
-        target_line_code: targetLineCode,
-        transfer_comment: comment,
-      }),
-    });
-  } catch {}
+  if (!isStandaloneMode()) {
+    try {
+      const tokens = getStoredTokens();
+      await fetch(`/api/v1/operators/tickets/${ticketId}/transfer`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: tokens?.access_token ? `Bearer ${tokens.access_token}` : '',
+        },
+        body: JSON.stringify({
+          target_line_code: targetLineCode,
+          transfer_comment: comment,
+        }),
+      });
+    } catch {}
+  }
 
   // Remove from operator's assigned tickets
   const tickets = getLocalStoredTickets().filter((t) => t.ticket_id !== ticketId);
@@ -434,15 +447,17 @@ export async function transferTicket(
 }
 
 export async function resolveOperatorTicket(ticketId: string): Promise<void> {
-  try {
-    const tokens = getStoredTokens();
-    await fetch(`/api/v1/operators/tickets/${ticketId}/resolve`, {
-      method: 'POST',
-      headers: {
-        Authorization: tokens?.access_token ? `Bearer ${tokens.access_token}` : '',
-      },
-    });
-  } catch {}
+  if (!isStandaloneMode()) {
+    try {
+      const tokens = getStoredTokens();
+      await fetch(`/api/v1/operators/tickets/${ticketId}/resolve`, {
+        method: 'POST',
+        headers: {
+          Authorization: tokens?.access_token ? `Bearer ${tokens.access_token}` : '',
+        },
+      });
+    } catch {}
+  }
 
   // Remove from active sidebar
   const tickets = getLocalStoredTickets().filter((t) => t.ticket_id !== ticketId);
@@ -454,6 +469,10 @@ export { mapOperatorMessage };
 export function subscribeOperatorEvents(
   onEvent?: (event: string, data: any) => void
 ): () => void {
+  if (isStandaloneMode()) {
+    return () => {};
+  }
+
   const tokens = getStoredTokens();
   if (!tokens?.access_token) {
     return () => {};

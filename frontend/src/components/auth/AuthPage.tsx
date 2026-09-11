@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Sparkles,
   Lock,
@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { UserProfile, UserRole } from '../../types/auth';
 import { loginUser, registerUser, DEMO_USERS } from '../../services/auth';
+import { isStandaloneMode, setStandaloneMode, onModeChange } from '../../config/mode';
 
 interface AuthPageProps {
   onSuccess: (user: UserProfile) => void;
@@ -23,6 +24,12 @@ interface AuthPageProps {
 }
 
 export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onCancel }) => {
+  const [standalone, setStandalone] = useState(() => isStandaloneMode());
+
+  useEffect(() => {
+    return onModeChange((s) => setStandalone(s));
+  }, []);
+
   const [tab, setTab] = useState<'login' | 'register'>('login');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -162,6 +169,45 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onCancel }) => {
           <p className="text-xs sm:text-sm text-text-100 mt-1">
             Единая система интеллектуальной поддержки
           </p>
+        </div>
+
+        {/* Mode Switcher Banner */}
+        <div
+          className={`mb-5 p-3 rounded-2xl border text-xs flex items-center justify-between gap-3 ${
+            standalone
+              ? 'bg-blue-50/80 border-blue-200 text-blue-900'
+              : 'bg-emerald-50/80 border-emerald-200 text-emerald-900'
+          }`}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <span
+              className={`size-2.5 rounded-full shrink-0 ${
+                standalone ? 'bg-blue-500' : 'bg-emerald-500'
+              }`}
+            />
+            <div className="truncate">
+              <span className="font-semibold block truncate">
+                {standalone ? 'Автономный режим (Чисто визуал)' : 'Режим связи с бэкендом (API)'}
+              </span>
+              <span className="text-[11px] opacity-80 block truncate">
+                {standalone
+                  ? 'Работает без API и БД. Доступен быстрый демо-вход.'
+                  : 'Запросы направляются к реальному FastAPI и БД.'}
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setStandaloneMode(!standalone)}
+            title={standalone ? 'Переключить на бэкенд' : 'Переключить в автономный режим'}
+            className={`text-xs font-semibold px-2.5 py-1 rounded-xl transition cursor-pointer shrink-0 ${
+              standalone
+                ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-2xs'
+                : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs'
+            }`}
+          >
+            {standalone ? 'К API' : 'В Демо'}
+          </button>
         </div>
 
         {/* Tabs: Вход / Регистрация */}

@@ -1,4 +1,6 @@
 import { AuthTokens, UserProfile, UserRole } from '../types/auth';
+import { isStandaloneMode } from '../config/mode';
+import { generateMockAuthTokens } from './mockData';
 
 const TOKEN_KEY = 'portal_auth_tokens';
 const USER_KEY = 'portal_auth_user';
@@ -116,6 +118,20 @@ export async function loginUser(
   email: string,
   password: string
 ): Promise<AuthTokens> {
+  if (isStandaloneMode()) {
+    const cleanEmail = email.trim().toLowerCase();
+    const demo = DEMO_USERS.find((d) => d.email.toLowerCase() === cleanEmail);
+    const tokens = generateMockAuthTokens({
+      email: demo ? demo.email : email.trim(),
+      role_code: demo ? demo.role : 'client',
+      full_name: demo ? demo.name : email.split('@')[0],
+      company_name: demo ? demo.company : 'ООО «Поставка»',
+      inn: demo ? demo.inn : '7701234567',
+    });
+    setStoredAuth(tokens);
+    return tokens;
+  }
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10000);
 
@@ -166,6 +182,18 @@ export async function registerUser(data: {
   company_name?: string;
   inn?: string;
 }): Promise<AuthTokens> {
+  if (isStandaloneMode()) {
+    const tokens = generateMockAuthTokens({
+      email: data.email.trim(),
+      role_code: 'client',
+      full_name: data.full_name?.trim() || 'Новый Поставщик',
+      company_name: data.company_name?.trim() || 'ООО «Поставка»',
+      inn: data.inn?.trim() || '7701234567',
+    });
+    setStoredAuth(tokens);
+    return tokens;
+  }
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10000);
 
@@ -228,6 +256,10 @@ export async function registerUser(data: {
 }
 
 export async function fetchCurrentUser(): Promise<UserProfile | null> {
+  if (isStandaloneMode()) {
+    return getStoredUser();
+  }
+
   const tokens = getStoredTokens();
   if (!tokens?.access_token) {
     clearStoredAuth();

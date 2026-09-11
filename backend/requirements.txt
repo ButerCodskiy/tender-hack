@@ -8,6 +8,7 @@ psutil>=5.9.0
 pydantic>=2.13.5
 pydantic-settings>=2.15.0
 pyjwt>=2.13.0
+pytest>=9.1.1
 pymupdf>=1.25.0
 python-multipart>=0.0.9
 qdrant-client>=1.13.0

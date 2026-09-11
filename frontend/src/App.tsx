@@ -18,9 +18,11 @@ import {
   subscribeChatEvents,
 } from './services/api';
 import { getStoredUser, clearStoredAuth, fetchCurrentUser } from './services/auth';
+import { isStandaloneMode, setStandaloneMode, onModeChange } from './config/mode';
 import { Sparkles, ShieldCheck, Headphones, UserCheck } from 'lucide-react';
 
 export const App: React.FC = () => {
+  const [standalone, setStandalone] = useState(() => isStandaloneMode());
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(() => getStoredUser());
   const [viewMode, setViewMode] = useState<'client' | 'operator'>(() => {
@@ -30,6 +32,10 @@ export const App: React.FC = () => {
     }
     return 'client';
   });
+
+  useEffect(() => {
+    return onModeChange((s) => setStandalone(s));
+  }, []);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -74,7 +80,7 @@ export const App: React.FC = () => {
         setUser(null);
       }
     });
-  }, []);
+  }, [standalone]);
 
   // Загрузка реального состояния чата с бэкенда при входе клиента
   useEffect(() => {
@@ -189,7 +195,7 @@ export const App: React.FC = () => {
         }
       });
     }
-  }, [user]);
+  }, [user, standalone]);
 
   // Подписка на Server-Sent Events (SSE) активного обращения
   useEffect(() => {
@@ -692,9 +698,31 @@ export const App: React.FC = () => {
                 </div>
               </div>
 
-              {/* Status Action in header */}
-              {activeSession.status === 'active' && (
-                <div className="flex items-center gap-2">
+              {/* Mode & Status Actions in header */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setStandaloneMode(!standalone)}
+                  title={
+                    standalone
+                      ? 'Автономный режим (UI Mock). Кликните для переключения на бэкенд API.'
+                      : 'Режим связи с бэкендом (API). Кликните для переключения в Демо.'
+                  }
+                  className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border transition cursor-pointer hover:opacity-90 ${
+                    standalone
+                      ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                      : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                  }`}
+                >
+                  <span
+                    className={`size-1.5 rounded-full ${
+                      standalone ? 'bg-blue-500' : 'bg-emerald-500'
+                    }`}
+                  />
+                  <span>{standalone ? 'Автономный' : 'API'}</span>
+                </button>
+
+                {activeSession.status === 'active' && (
                   <button
                     type="button"
                     onClick={handleEscalateToOperator}
@@ -703,22 +731,22 @@ export const App: React.FC = () => {
                     <Headphones className="size-3.5 text-primary-500" />
                     <span className="hidden sm:inline">Вызвать оператора</span>
                   </button>
-                </div>
-              )}
+                )}
 
-              {activeSession.status === 'escalated_to_operator' && (
-                operatorName ? (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
-                    <UserCheck className="size-3.5 text-emerald-600" />
-                    <span>Специалист: <strong>{operatorName}</strong></span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
-                    <Headphones className="size-3.5 text-amber-600" />
-                    <span>В очереди к оператору</span>
-                  </div>
-                )
-              )}
+                {activeSession.status === 'escalated_to_operator' && (
+                  operatorName ? (
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
+                      <UserCheck className="size-3.5 text-emerald-600" />
+                      <span>Специалист: <strong>{operatorName}</strong></span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                      <Headphones className="size-3.5 text-amber-600" />
+                      <span>В очереди к оператору</span>
+                    </div>
+                  )
+                )}
+              </div>
             </header>
           )}
 

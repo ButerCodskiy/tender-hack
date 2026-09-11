@@ -1,5 +1,13 @@
 import { Citation } from '../types/chat';
 import { clearStoredAuth, getStoredTokens } from './auth';
+import { isStandaloneMode } from '../config/mode';
+import {
+  simulateMockChatStream,
+  getMockChatState,
+  mockEscalateTicket,
+  mockResolveTicket,
+  mockSubmitFeedback,
+} from './mockData';
 
 interface SendMessagePayload {
   chatId?: string;
@@ -56,6 +64,10 @@ export interface BackendChatState {
 }
 
 export async function fetchChatState(): Promise<BackendChatState | null> {
+  if (isStandaloneMode()) {
+    return getMockChatState();
+  }
+
   const tokens = getStoredTokens();
   if (!tokens?.access_token) return null;
 
@@ -84,6 +96,10 @@ export async function streamChatMessage(
   payload: SendMessagePayload,
   callbacks: StreamCallbacks
 ): Promise<void> {
+  if (isStandaloneMode()) {
+    return simulateMockChatStream(payload.content, callbacks);
+  }
+
   const tokens = getStoredTokens();
   if (!tokens?.access_token) {
     clearStoredAuth();
@@ -256,6 +272,10 @@ export async function streamChatMessage(
 export async function escalateTicket(
   reason?: string
 ): Promise<ActiveTicketSummary> {
+  if (isStandaloneMode()) {
+    return mockEscalateTicket();
+  }
+
   const tokens = getStoredTokens();
   if (!tokens?.access_token) {
     throw new Error('Необходима авторизация');
@@ -288,6 +308,10 @@ export async function escalateTicket(
 export async function resolveTicket(
   ticketId: string
 ): Promise<ClientResolveTicketResponse> {
+  if (isStandaloneMode()) {
+    return mockResolveTicket(ticketId);
+  }
+
   const tokens = getStoredTokens();
   if (!tokens?.access_token) {
     throw new Error('Необходима авторизация');
@@ -320,6 +344,10 @@ export async function submitFeedback(
   score: number,
   comment?: string
 ): Promise<void> {
+  if (isStandaloneMode()) {
+    return mockSubmitFeedback(ticketId, score, comment);
+  }
+
   const tokens = getStoredTokens();
   if (!tokens?.access_token) {
     throw new Error('Необходима авторизация');
@@ -351,6 +379,10 @@ export function subscribeChatEvents(
   ticketId?: string,
   onEvent?: (event: string, data: any) => void
 ): () => void {
+  if (isStandaloneMode()) {
+    return () => {};
+  }
+
   const tokens = getStoredTokens();
   if (!tokens?.access_token) {
     return () => {};
