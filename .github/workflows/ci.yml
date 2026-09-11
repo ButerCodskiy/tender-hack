@@ -1,0 +1,35 @@
+name: "check"
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ruff:
+    name: Ruff check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+          cache-dependency-path: "requirements.txt"
+
+      - name: Install Ruff from requirements
+        run: |
+          pip install $(grep -i -E "^ruff[=><~]" requirements.txt)
+
+      - name: Run Ruff check
+        run: python scripts/check_ruff.py

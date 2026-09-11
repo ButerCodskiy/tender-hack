@@ -9,6 +9,8 @@ from fastapi import Depends, HTTPException, Query, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.analytics.repository import AnalyticsRepository
+from src.analytics.service import AnalyticsService
 from src.auth.models import UserModel, UserRole
 from src.auth.repository import UserRepository
 from src.auth.service import AuthService
@@ -450,3 +452,26 @@ async def get_operator_service(
 
 
 OperatorServiceDep = Annotated[OperatorService, Depends(get_operator_service)]
+
+
+async def get_analytics_repository(session: SessionDep) -> AnalyticsRepository:
+    """Провайдер репозитория аналитики и контроля качества."""
+    return AnalyticsRepository(session=session)
+
+
+AnalyticsRepositoryDep = Annotated[
+    AnalyticsRepository, Depends(get_analytics_repository)
+]
+
+
+async def get_analytics_service(
+    session: SessionDep,
+    redis: RedisDep,
+) -> AnalyticsService:
+    """Провайдер сервиса аналитики и контроля качества AnalyticsService."""
+    return AnalyticsService(session=session, redis=redis)
+
+
+AnalyticsServiceDep = Annotated[
+    AnalyticsService, Depends(get_analytics_service)
+]
