@@ -1,0 +1,136 @@
+name: rag
+
+x-backend-base: &backend-base
+  build:
+    context: ./backend
+    dockerfile: Dockerfile
+  image: rag-backend:latest
+  restart: unless-stopped
+  env_file:
+    - backend/.env
+  environment:
+    DB_HOST: postgres
+    REDIS_HOST: redis
+    QDRANT_HOST: qdrant
+    KB_STORAGE_DIR: /data/kb_documents
+  volumes:
+    - ./backend/src:/app/src
+    - ./backend/alembic:/app/alembic
+    - kb_documents_data:/data/kb_documents
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    qdrant:
+      condition: service_healthy
+  networks:
+    - rag_network
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: rag_postgres
+    restart: unless-stopped
+    env_file:
+      - backend/.env
+    environment:
+      POSTGRES_USER: ${DB_USER:-rag_user}
+      POSTGRES_PASSWORD: ${DB_PASS:-rag_password}
+      POSTGRES_DB: ${DB_NAME:-rag_db}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-rag_user} -d ${DB_NAME:-rag_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rag_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: rag_redis
+    restart: unless-stopped
+    env_file:
+      - backend/.env
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rag_network
+
+  qdrant:
+    image: qdrant/qdrant:v1.19.1
+    container_name: rag_qdrant
+    restart: unless-stopped
+    env_file:
+      - backend/.env
+    ports:
+      - "${QDRANT_PORT:-6333}:6333"
+      - "${QDRANT_GRPC_PORT:-6334}:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rag_network
+
+  api:
+    <<: *backend-base
+    container_name: rag_api
+    ports:
+      - "8000:8000"
+    command: ["sh", "-c", "alembic upgrade head && python -m src.db.seed_demo && uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload"]
+
+  worker:
+    <<: *backend-base
+    container_name: rag_worker
+    command: ["taskiq", "worker", "src.core.broker:broker", "--fs-discover"]
+
+  scheduler:
+    <<: *backend-base
+    container_name: rag_scheduler
+    command: ["taskiq", "scheduler", "src.core.broker:scheduler", "--fs-discover"]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: rag_frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_BACKEND_URL=http://api:8000
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/index.html:/app/index.html
+      - ./frontend/vite.config.ts:/app/vite.config.ts
+      - /app/node_modules
+    depends_on:
+      - api
+    networks:
+      - rag_network
+
+volumes:
+  postgres_data:
+  redis_data:
+  qdrant_data:
+  kb_documents_data:
+
+networks:
+  rag_network:
+    name: rag_network

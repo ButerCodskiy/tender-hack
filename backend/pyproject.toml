@@ -1,0 +1,101 @@
+[project]
+name = "rag-backend"
+version = "0.1.0"
+description = "Production-ready RAG and document ingestion subsystem for procurement regulations"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.19.2",
+    "asyncpg>=0.31.0",
+    "bcrypt>=5.0.0",
+    "email-validator>=2.3.0",
+    "fastapi>=0.141.1",
+    "httpx>=0.28.1",
+    "openpyxl>=3.1.5",
+    "psutil>=5.9.0",
+    "pydantic>=2.13.5",
+    "pydantic-settings>=2.15.0",
+    "pyjwt>=2.13.0",
+    "pymupdf>=1.25.0",
+    "python-multipart>=0.0.9",
+    "qdrant-client>=1.13.0",
+    "razdel>=0.5.0",
+    "redis>=8.1.0",
+    "sentencepiece>=0.2.0",
+    "sqlalchemy[asyncio]>=2.0.52",
+    "taskiq>=0.12.6",
+    "taskiq-fastapi>=0.5.0",
+    "taskiq-redis>=1.2.3",
+    "tiktoken>=0.9.0",
+    "torch>=2.2.0",
+    "tqdm>=4.66.0",
+    "transformers>=4.40.0",
+    "uuid6>=2025.0.1",
+    "uvicorn>=0.52.4",
+]
+
+[dependency-groups]
+dev = [
+    "docling>=2.0.0",
+    "pre-commit>=4.6.2",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.16.6",
+    "testcontainers[postgres]>=4.15.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "docling>=2.0.0",
+    "pre-commit>=4.6.2",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.16.6",
+    "testcontainers[postgres]>=4.15.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.ruff]
+line-length = 79
+exclude = [
+  ".git",
+  ".venv",
+  "build",
+  "dist",
+  "tests/data",
+  "__pycache__",
+  "notebooks",
+]
+
+[tool.ruff.lint]
+extend-select = [
+    "E",
+    "W",
+    "I",
+    "B",
+    "UP",
+    "RUF",
+    "FAST",
+]
+
+ignore = [
+    "E501",
+    "B008",
+    "RUF001",
+    "RUF002",
+    "RUF003",
+    "BLE001",
+    "S110",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src", "app"]

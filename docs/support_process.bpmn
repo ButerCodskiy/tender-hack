@@ -1,0 +1,532 @@
+<?xml version="1.0" encoding="utf-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_SupportProcess" targetNamespace="http://bpmn.io/schema/bpmn" exporter="StormBPMN Generator" exporterVersion="2.0">
+  <bpmn:collaboration id="Collaboration_Support">
+    <bpmn:participant id="Participant_SupportProcess" name="Сквозной процесс технической поддержки (RAG + АРМ Оператора)" processRef="Process_Support"/>
+  </bpmn:collaboration>
+  <bpmn:process id="Process_Support" isExecutable="true">
+    <bpmn:laneSet id="LaneSet_Support">
+      <bpmn:lane id="Lane_Client" name="Клиент (Пользователь)">
+        <bpmn:flowNodeRef>Start_ClientQuestion</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_ClientSendMessage</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_ClientReceiveResponse</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_ClientFeedback</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>End_ClientSuccess</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>End_ClientAbuse</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Chat" name="Сервис диалогов (chat)">
+        <bpmn:flowNodeRef>Task_CheckProfanity</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_Profanity</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_CloseAbuse</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_SaveContext</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_SendStreamResponse</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_RAG" name="Поисково-генеративное ядро (rag)">
+        <bpmn:flowNodeRef>Task_RouteQuery</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_HybridSearch</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_Confidence</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_FaqFastPath</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_AssembleContext</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_GenerateAnswer</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_VerifySlots</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Operators" name="Диспетчер очередей и задач (operators)">
+        <bpmn:flowNodeRef>Task_EnqueueTicket</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_ForkEscalation</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_CopilotSummary</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_BalanceSlots</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_JoinEscalation</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_NotifyOperator</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_OperatorARM" name="Специалист поддержки (АРМ)">
+        <bpmn:flowNodeRef>Task_OperatorConsult</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_NewKnowledge</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_SubmitFaqDraft</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_ResolveTicket</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Analytics" name="Контроль качества и аудит (analytics)">
+        <bpmn:flowNodeRef>Gateway_AnalyticsTrigger</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_AuditQuality</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_IncidentCheck</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_LogIncident</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>End_AuditCompleted</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="Start_ClientQuestion" name="Возник вопрос">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="Task_ClientSendMessage" name="Отправка сообщения в чат">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:userTask id="Task_ClientReceiveResponse" name="Получение ответа и ознакомление">
+      <bpmn:incoming>Flow_16_ToClient</bpmn:incoming>
+      <bpmn:incoming>Flow_27_OpToClient</bpmn:incoming>
+      <bpmn:outgoing>Flow_17_ToFeedback</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:userTask id="Task_ClientFeedback" name="Оценка качества ответа">
+      <bpmn:incoming>Flow_17_ToFeedback</bpmn:incoming>
+      <bpmn:outgoing>Flow_18_ClientDone</bpmn:outgoing>
+      <bpmn:outgoing>Flow_33_FeedbackToAnalytics</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:endEvent id="End_ClientSuccess" name="Вопрос решен">
+      <bpmn:incoming>Flow_18_ClientDone</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:endEvent id="End_ClientAbuse" name="Диалог заблокирован за мат">
+      <bpmn:incoming>Flow_5_AbuseEnd</bpmn:incoming>
+      <bpmn:terminateEventDefinition/>
+    </bpmn:endEvent>
+    <bpmn:serviceTask id="Task_CheckProfanity" name="Проверка на ненормативную лексику">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="Gateway_Profanity" name="Лексика в норме?">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_4_Abuse</bpmn:outgoing>
+      <bpmn:outgoing>Flow_6_Clean</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="Task_CloseAbuse" name="Завершение сессии и отправка предупреждения">
+      <bpmn:incoming>Flow_4_Abuse</bpmn:incoming>
+      <bpmn:outgoing>Flow_5_AbuseEnd</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_SaveContext" name="Сохранение реплики в БД и контекста в Redis">
+      <bpmn:incoming>Flow_6_Clean</bpmn:incoming>
+      <bpmn:outgoing>Flow_7</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_SendStreamResponse" name="Передача ответа клиенту потоком SSE">
+      <bpmn:incoming>Flow_14_FaqToSend</bpmn:incoming>
+      <bpmn:incoming>Flow_15_GenToSend</bpmn:incoming>
+      <bpmn:outgoing>Flow_16_ToClient</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_RouteQuery" name="Классификация темы, приоритета и линии">
+      <bpmn:incoming>Flow_7</bpmn:incoming>
+      <bpmn:outgoing>Flow_8</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_HybridSearch" name="Двухканальный поиск и Cross-Encoder реранк">
+      <bpmn:incoming>Flow_8</bpmn:incoming>
+      <bpmn:outgoing>Flow_9</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="Gateway_Confidence" name="Оценка релевантности?">
+      <bpmn:incoming>Flow_9</bpmn:incoming>
+      <bpmn:outgoing>Flow_10_Faq</bpmn:outgoing>
+      <bpmn:outgoing>Flow_11_High</bpmn:outgoing>
+      <bpmn:outgoing>Flow_19_Escalate</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="Task_FaqFastPath" name="Быстрый ответ типового решения FAQ">
+      <bpmn:incoming>Flow_10_Faq</bpmn:incoming>
+      <bpmn:outgoing>Flow_14_FaqToSend</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_AssembleContext" name="Сборка контекста по AST и связям">
+      <bpmn:incoming>Flow_11_High</bpmn:incoming>
+      <bpmn:outgoing>Flow_12_RAGGen</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_GenerateAnswer" name="Потоковая генерация ответа со сносками">
+      <bpmn:incoming>Flow_12_RAGGen</bpmn:incoming>
+      <bpmn:outgoing>Flow_13_Verify</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_VerifySlots" name="Инлайн-проверка числовых слотов">
+      <bpmn:incoming>Flow_13_Verify</bpmn:incoming>
+      <bpmn:outgoing>Flow_15_GenToSend</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_EnqueueTicket" name="Постановка тикета в очередь линии в Redis">
+      <bpmn:incoming>Flow_19_Escalate</bpmn:incoming>
+      <bpmn:outgoing>Flow_20_Fork</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:parallelGateway id="Gateway_ForkEscalation" name="Параллельная обработка">
+      <bpmn:incoming>Flow_20_Fork</bpmn:incoming>
+      <bpmn:outgoing>Flow_21_Copilot</bpmn:outgoing>
+      <bpmn:outgoing>Flow_22_Balance</bpmn:outgoing>
+    </bpmn:parallelGateway>
+    <bpmn:serviceTask id="Task_CopilotSummary" name="Фоновая генерация сводки и подбор статей">
+      <bpmn:incoming>Flow_21_Copilot</bpmn:incoming>
+      <bpmn:outgoing>Flow_23_CopilotJoin</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_BalanceSlots" name="Балансировка и захват слота оператора">
+      <bpmn:incoming>Flow_22_Balance</bpmn:incoming>
+      <bpmn:outgoing>Flow_24_BalanceJoin</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:parallelGateway id="Gateway_JoinEscalation" name="Синхронизация задач">
+      <bpmn:incoming>Flow_23_CopilotJoin</bpmn:incoming>
+      <bpmn:incoming>Flow_24_BalanceJoin</bpmn:incoming>
+      <bpmn:outgoing>Flow_25_Notify</bpmn:outgoing>
+    </bpmn:parallelGateway>
+    <bpmn:serviceTask id="Task_NotifyOperator" name="Оповещение АРМ оператора через брокер">
+      <bpmn:incoming>Flow_25_Notify</bpmn:incoming>
+      <bpmn:outgoing>Flow_26_ToOperator</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:userTask id="Task_OperatorConsult" name="Консультация клиента в диалоге">
+      <bpmn:incoming>Flow_26_ToOperator</bpmn:incoming>
+      <bpmn:outgoing>Flow_27_OpToClient</bpmn:outgoing>
+      <bpmn:outgoing>Flow_28_OpGate</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:exclusiveGateway id="Gateway_NewKnowledge" name="Решение уникально?">
+      <bpmn:incoming>Flow_28_OpGate</bpmn:incoming>
+      <bpmn:outgoing>Flow_29_FaqYes</bpmn:outgoing>
+      <bpmn:outgoing>Flow_30_FaqNo</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="Task_SubmitFaqDraft" name="Отправка пары вопрос-ответ на модерацию FAQ">
+      <bpmn:incoming>Flow_29_FaqYes</bpmn:incoming>
+      <bpmn:outgoing>Flow_31_FaqClose</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_ResolveTicket" name="Перевод тикета в статус resolved">
+      <bpmn:incoming>Flow_30_FaqNo</bpmn:incoming>
+      <bpmn:incoming>Flow_31_FaqClose</bpmn:incoming>
+      <bpmn:outgoing>Flow_32_ToAnalytics</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="Gateway_AnalyticsTrigger" name="Событие аудита">
+      <bpmn:incoming>Flow_32_ToAnalytics</bpmn:incoming>
+      <bpmn:incoming>Flow_33_FeedbackToAnalytics</bpmn:incoming>
+      <bpmn:outgoing>Flow_34_TriggerAudit</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="Task_AuditQuality" name="Автоматический аудит диалога нейросетью">
+      <bpmn:incoming>Flow_34_TriggerAudit</bpmn:incoming>
+      <bpmn:outgoing>Flow_35_AuditGate</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="Gateway_IncidentCheck" name="Сбой платформы?">
+      <bpmn:incoming>Flow_35_AuditGate</bpmn:incoming>
+      <bpmn:outgoing>Flow_36_IncYes</bpmn:outgoing>
+      <bpmn:outgoing>Flow_37_IncNo</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="Task_LogIncident" name="Фиксация системного сбоя в реестре">
+      <bpmn:incoming>Flow_36_IncYes</bpmn:incoming>
+      <bpmn:outgoing>Flow_38_IncEnd</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="End_AuditCompleted" name="Обращение проверено">
+      <bpmn:incoming>Flow_37_IncNo</bpmn:incoming>
+      <bpmn:incoming>Flow_38_IncEnd</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Start_ClientQuestion" targetRef="Task_ClientSendMessage"/>
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_ClientSendMessage" targetRef="Task_CheckProfanity"/>
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Task_CheckProfanity" targetRef="Gateway_Profanity"/>
+    <bpmn:sequenceFlow id="Flow_4_Abuse" sourceRef="Gateway_Profanity" targetRef="Task_CloseAbuse" name="Нарушение"/>
+    <bpmn:sequenceFlow id="Flow_5_AbuseEnd" sourceRef="Task_CloseAbuse" targetRef="End_ClientAbuse"/>
+    <bpmn:sequenceFlow id="Flow_6_Clean" sourceRef="Gateway_Profanity" targetRef="Task_SaveContext" name="Норма"/>
+    <bpmn:sequenceFlow id="Flow_7" sourceRef="Task_SaveContext" targetRef="Task_RouteQuery"/>
+    <bpmn:sequenceFlow id="Flow_8" sourceRef="Task_RouteQuery" targetRef="Task_HybridSearch"/>
+    <bpmn:sequenceFlow id="Flow_9" sourceRef="Task_HybridSearch" targetRef="Gateway_Confidence"/>
+    <bpmn:sequenceFlow id="Flow_10_Faq" sourceRef="Gateway_Confidence" targetRef="Task_FaqFastPath" name="Типовой FAQ"/>
+    <bpmn:sequenceFlow id="Flow_11_High" sourceRef="Gateway_Confidence" targetRef="Task_AssembleContext" name="Высокий скор"/>
+    <bpmn:sequenceFlow id="Flow_12_RAGGen" sourceRef="Task_AssembleContext" targetRef="Task_GenerateAnswer"/>
+    <bpmn:sequenceFlow id="Flow_13_Verify" sourceRef="Task_GenerateAnswer" targetRef="Task_VerifySlots"/>
+    <bpmn:sequenceFlow id="Flow_14_FaqToSend" sourceRef="Task_FaqFastPath" targetRef="Task_SendStreamResponse"/>
+    <bpmn:sequenceFlow id="Flow_15_GenToSend" sourceRef="Task_VerifySlots" targetRef="Task_SendStreamResponse"/>
+    <bpmn:sequenceFlow id="Flow_16_ToClient" sourceRef="Task_SendStreamResponse" targetRef="Task_ClientReceiveResponse" name="SSE поток"/>
+    <bpmn:sequenceFlow id="Flow_17_ToFeedback" sourceRef="Task_ClientReceiveResponse" targetRef="Task_ClientFeedback"/>
+    <bpmn:sequenceFlow id="Flow_18_ClientDone" sourceRef="Task_ClientFeedback" targetRef="End_ClientSuccess"/>
+    <bpmn:sequenceFlow id="Flow_19_Escalate" sourceRef="Gateway_Confidence" targetRef="Task_EnqueueTicket" name="Низкий скор / вызов"/>
+    <bpmn:sequenceFlow id="Flow_20_Fork" sourceRef="Task_EnqueueTicket" targetRef="Gateway_ForkEscalation"/>
+    <bpmn:sequenceFlow id="Flow_21_Copilot" sourceRef="Gateway_ForkEscalation" targetRef="Task_CopilotSummary"/>
+    <bpmn:sequenceFlow id="Flow_22_Balance" sourceRef="Gateway_ForkEscalation" targetRef="Task_BalanceSlots"/>
+    <bpmn:sequenceFlow id="Flow_23_CopilotJoin" sourceRef="Task_CopilotSummary" targetRef="Gateway_JoinEscalation"/>
+    <bpmn:sequenceFlow id="Flow_24_BalanceJoin" sourceRef="Task_BalanceSlots" targetRef="Gateway_JoinEscalation"/>
+    <bpmn:sequenceFlow id="Flow_25_Notify" sourceRef="Gateway_JoinEscalation" targetRef="Task_NotifyOperator"/>
+    <bpmn:sequenceFlow id="Flow_26_ToOperator" sourceRef="Task_NotifyOperator" targetRef="Task_OperatorConsult" name="Назначен слот"/>
+    <bpmn:sequenceFlow id="Flow_27_OpToClient" sourceRef="Task_OperatorConsult" targetRef="Task_ClientReceiveResponse" name="Ответ специалиста"/>
+    <bpmn:sequenceFlow id="Flow_28_OpGate" sourceRef="Task_OperatorConsult" targetRef="Gateway_NewKnowledge"/>
+    <bpmn:sequenceFlow id="Flow_29_FaqYes" sourceRef="Gateway_NewKnowledge" targetRef="Task_SubmitFaqDraft" name="Да"/>
+    <bpmn:sequenceFlow id="Flow_30_FaqNo" sourceRef="Gateway_NewKnowledge" targetRef="Task_ResolveTicket" name="Нет"/>
+    <bpmn:sequenceFlow id="Flow_31_FaqClose" sourceRef="Task_SubmitFaqDraft" targetRef="Task_ResolveTicket"/>
+    <bpmn:sequenceFlow id="Flow_32_ToAnalytics" sourceRef="Task_ResolveTicket" targetRef="Gateway_AnalyticsTrigger"/>
+    <bpmn:sequenceFlow id="Flow_33_FeedbackToAnalytics" sourceRef="Task_ClientFeedback" targetRef="Gateway_AnalyticsTrigger" name="Оценка CSAT"/>
+    <bpmn:sequenceFlow id="Flow_34_TriggerAudit" sourceRef="Gateway_AnalyticsTrigger" targetRef="Task_AuditQuality"/>
+    <bpmn:sequenceFlow id="Flow_35_AuditGate" sourceRef="Task_AuditQuality" targetRef="Gateway_IncidentCheck"/>
+    <bpmn:sequenceFlow id="Flow_36_IncYes" sourceRef="Gateway_IncidentCheck" targetRef="Task_LogIncident" name="Да"/>
+    <bpmn:sequenceFlow id="Flow_37_IncNo" sourceRef="Gateway_IncidentCheck" targetRef="End_AuditCompleted" name="Нет"/>
+    <bpmn:sequenceFlow id="Flow_38_IncEnd" sourceRef="Task_LogIncident" targetRef="End_AuditCompleted"/>
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Support">
+    <bpmndi:BPMNPlane id="BPMNPlane_Support" bpmnElement="Collaboration_Support">
+      <bpmndi:BPMNShape id="Participant_SupportProcess_di" bpmnElement="Participant_SupportProcess" isHorizontal="true">
+        <dc:Bounds x="160" y="80" width="2100" height="1000"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Client_di" bpmnElement="Lane_Client" isHorizontal="true">
+        <dc:Bounds x="190" y="80" width="2070" height="160"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Chat_di" bpmnElement="Lane_Chat" isHorizontal="true">
+        <dc:Bounds x="190" y="240" width="2070" height="160"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_RAG_di" bpmnElement="Lane_RAG" isHorizontal="true">
+        <dc:Bounds x="190" y="400" width="2070" height="180"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Operators_di" bpmnElement="Lane_Operators" isHorizontal="true">
+        <dc:Bounds x="190" y="580" width="2070" height="180"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_OperatorARM_di" bpmnElement="Lane_OperatorARM" isHorizontal="true">
+        <dc:Bounds x="190" y="760" width="2070" height="160"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Analytics_di" bpmnElement="Lane_Analytics" isHorizontal="true">
+        <dc:Bounds x="190" y="920" width="2070" height="160"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Start_ClientQuestion_di" bpmnElement="Start_ClientQuestion">
+        <dc:Bounds x="220" y="142" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_ClientSendMessage_di" bpmnElement="Task_ClientSendMessage">
+        <dc:Bounds x="290" y="120" width="120" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_ClientReceiveResponse_di" bpmnElement="Task_ClientReceiveResponse">
+        <dc:Bounds x="1600" y="120" width="130" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_ClientFeedback_di" bpmnElement="Task_ClientFeedback">
+        <dc:Bounds x="1780" y="120" width="120" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_ClientSuccess_di" bpmnElement="End_ClientSuccess">
+        <dc:Bounds x="1950" y="142" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_ClientAbuse_di" bpmnElement="End_ClientAbuse">
+        <dc:Bounds x="620" y="142" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_CheckProfanity_di" bpmnElement="Task_CheckProfanity">
+        <dc:Bounds x="290" y="280" width="120" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_Profanity_di" bpmnElement="Gateway_Profanity">
+        <dc:Bounds x="460" y="295" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_CloseAbuse_di" bpmnElement="Task_CloseAbuse">
+        <dc:Bounds x="560" y="250" width="130" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_SaveContext_di" bpmnElement="Task_SaveContext">
+        <dc:Bounds x="560" y="330" width="130" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_SendStreamResponse_di" bpmnElement="Task_SendStreamResponse">
+        <dc:Bounds x="1600" y="280" width="130" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_RouteQuery_di" bpmnElement="Task_RouteQuery">
+        <dc:Bounds x="730" y="450" width="130" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_HybridSearch_di" bpmnElement="Task_HybridSearch">
+        <dc:Bounds x="900" y="450" width="130" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_Confidence_di" bpmnElement="Gateway_Confidence">
+        <dc:Bounds x="1070" y="465" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_FaqFastPath_di" bpmnElement="Task_FaqFastPath">
+        <dc:Bounds x="1170" y="410" width="130" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_AssembleContext_di" bpmnElement="Task_AssembleContext">
+        <dc:Bounds x="1170" y="490" width="130" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_GenerateAnswer_di" bpmnElement="Task_GenerateAnswer">
+        <dc:Bounds x="1330" y="490" width="130" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_VerifySlots_di" bpmnElement="Task_VerifySlots">
+        <dc:Bounds x="1480" y="490" width="110" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_EnqueueTicket_di" bpmnElement="Task_EnqueueTicket">
+        <dc:Bounds x="1030" y="630" width="130" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_ForkEscalation_di" bpmnElement="Gateway_ForkEscalation">
+        <dc:Bounds x="1190" y="645" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_CopilotSummary_di" bpmnElement="Task_CopilotSummary">
+        <dc:Bounds x="1270" y="600" width="130" height="60"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_BalanceSlots_di" bpmnElement="Task_BalanceSlots">
+        <dc:Bounds x="1270" y="680" width="130" height="60"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_JoinEscalation_di" bpmnElement="Gateway_JoinEscalation">
+        <dc:Bounds x="1430" y="645" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_NotifyOperator_di" bpmnElement="Task_NotifyOperator">
+        <dc:Bounds x="1510" y="630" width="130" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_OperatorConsult_di" bpmnElement="Task_OperatorConsult">
+        <dc:Bounds x="1600" y="800" width="130" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_NewKnowledge_di" bpmnElement="Gateway_NewKnowledge">
+        <dc:Bounds x="1770" y="815" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_SubmitFaqDraft_di" bpmnElement="Task_SubmitFaqDraft">
+        <dc:Bounds x="1860" y="770" width="130" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_ResolveTicket_di" bpmnElement="Task_ResolveTicket">
+        <dc:Bounds x="1860" y="850" width="130" height="60"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_AnalyticsTrigger_di" bpmnElement="Gateway_AnalyticsTrigger">
+        <dc:Bounds x="1780" y="975" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_AuditQuality_di" bpmnElement="Task_AuditQuality">
+        <dc:Bounds x="1860" y="960" width="130" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_IncidentCheck_di" bpmnElement="Gateway_IncidentCheck">
+        <dc:Bounds x="2020" y="975" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_LogIncident_di" bpmnElement="Task_LogIncident">
+        <dc:Bounds x="2090" y="930" width="120" height="60"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_AuditCompleted_di" bpmnElement="End_AuditCompleted">
+        <dc:Bounds x="2140" y="1002" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1">
+        <di:waypoint x="256" y="160"/>
+        <di:waypoint x="290" y="160"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_2_di" bpmnElement="Flow_2">
+        <di:waypoint x="350" y="200"/>
+        <di:waypoint x="350" y="280"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_3_di" bpmnElement="Flow_3">
+        <di:waypoint x="410" y="320"/>
+        <di:waypoint x="460" y="320"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_4_Abuse_di" bpmnElement="Flow_4_Abuse">
+        <di:waypoint x="485" y="295"/>
+        <di:waypoint x="485" y="285"/>
+        <di:waypoint x="560" y="285"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_5_AbuseEnd_di" bpmnElement="Flow_5_AbuseEnd">
+        <di:waypoint x="625" y="250"/>
+        <di:waypoint x="625" y="178"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_6_Clean_di" bpmnElement="Flow_6_Clean">
+        <di:waypoint x="485" y="345"/>
+        <di:waypoint x="485" y="365"/>
+        <di:waypoint x="560" y="365"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_7_di" bpmnElement="Flow_7">
+        <di:waypoint x="690" y="365"/>
+        <di:waypoint x="710" y="365"/>
+        <di:waypoint x="710" y="490"/>
+        <di:waypoint x="730" y="490"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_8_di" bpmnElement="Flow_8">
+        <di:waypoint x="860" y="490"/>
+        <di:waypoint x="900" y="490"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_9_di" bpmnElement="Flow_9">
+        <di:waypoint x="1030" y="490"/>
+        <di:waypoint x="1070" y="490"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_10_Faq_di" bpmnElement="Flow_10_Faq">
+        <di:waypoint x="1095" y="465"/>
+        <di:waypoint x="1095" y="445"/>
+        <di:waypoint x="1170" y="445"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_11_High_di" bpmnElement="Flow_11_High">
+        <di:waypoint x="1095" y="515"/>
+        <di:waypoint x="1095" y="525"/>
+        <di:waypoint x="1170" y="525"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_12_RAGGen_di" bpmnElement="Flow_12_RAGGen">
+        <di:waypoint x="1300" y="525"/>
+        <di:waypoint x="1330" y="525"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_13_Verify_di" bpmnElement="Flow_13_Verify">
+        <di:waypoint x="1460" y="525"/>
+        <di:waypoint x="1480" y="525"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_14_FaqToSend_di" bpmnElement="Flow_14_FaqToSend">
+        <di:waypoint x="1300" y="445"/>
+        <di:waypoint x="1560" y="445"/>
+        <di:waypoint x="1560" y="320"/>
+        <di:waypoint x="1600" y="320"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_15_GenToSend_di" bpmnElement="Flow_15_GenToSend">
+        <di:waypoint x="1590" y="525"/>
+        <di:waypoint x="1665" y="525"/>
+        <di:waypoint x="1665" y="360"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_16_ToClient_di" bpmnElement="Flow_16_ToClient">
+        <di:waypoint x="1665" y="280"/>
+        <di:waypoint x="1665" y="200"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_17_ToFeedback_di" bpmnElement="Flow_17_ToFeedback">
+        <di:waypoint x="1730" y="160"/>
+        <di:waypoint x="1780" y="160"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_18_ClientDone_di" bpmnElement="Flow_18_ClientDone">
+        <di:waypoint x="1900" y="160"/>
+        <di:waypoint x="1950" y="160"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_19_Escalate_di" bpmnElement="Flow_19_Escalate">
+        <di:waypoint x="1095" y="515"/>
+        <di:waypoint x="1095" y="630"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_20_Fork_di" bpmnElement="Flow_20_Fork">
+        <di:waypoint x="1160" y="670"/>
+        <di:waypoint x="1190" y="670"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_21_Copilot_di" bpmnElement="Flow_21_Copilot">
+        <di:waypoint x="1215" y="645"/>
+        <di:waypoint x="1215" y="630"/>
+        <di:waypoint x="1270" y="630"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_22_Balance_di" bpmnElement="Flow_22_Balance">
+        <di:waypoint x="1215" y="695"/>
+        <di:waypoint x="1215" y="710"/>
+        <di:waypoint x="1270" y="710"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_23_CopilotJoin_di" bpmnElement="Flow_23_CopilotJoin">
+        <di:waypoint x="1400" y="630"/>
+        <di:waypoint x="1455" y="630"/>
+        <di:waypoint x="1455" y="645"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_24_BalanceJoin_di" bpmnElement="Flow_24_BalanceJoin">
+        <di:waypoint x="1400" y="710"/>
+        <di:waypoint x="1455" y="710"/>
+        <di:waypoint x="1455" y="695"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_25_Notify_di" bpmnElement="Flow_25_Notify">
+        <di:waypoint x="1480" y="670"/>
+        <di:waypoint x="1510" y="670"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_26_ToOperator_di" bpmnElement="Flow_26_ToOperator">
+        <di:waypoint x="1575" y="710"/>
+        <di:waypoint x="1575" y="840"/>
+        <di:waypoint x="1600" y="840"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_27_OpToClient_di" bpmnElement="Flow_27_OpToClient">
+        <di:waypoint x="1640" y="800"/>
+        <di:waypoint x="1640" y="200"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_28_OpGate_di" bpmnElement="Flow_28_OpGate">
+        <di:waypoint x="1730" y="840"/>
+        <di:waypoint x="1770" y="840"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_29_FaqYes_di" bpmnElement="Flow_29_FaqYes">
+        <di:waypoint x="1795" y="815"/>
+        <di:waypoint x="1795" y="805"/>
+        <di:waypoint x="1860" y="805"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_30_FaqNo_di" bpmnElement="Flow_30_FaqNo">
+        <di:waypoint x="1795" y="865"/>
+        <di:waypoint x="1795" y="880"/>
+        <di:waypoint x="1860" y="880"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_31_FaqClose_di" bpmnElement="Flow_31_FaqClose">
+        <di:waypoint x="1925" y="840"/>
+        <di:waypoint x="1925" y="850"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_32_ToAnalytics_di" bpmnElement="Flow_32_ToAnalytics">
+        <di:waypoint x="1860" y="910"/>
+        <di:waypoint x="1805" y="910"/>
+        <di:waypoint x="1805" y="975"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_33_FeedbackToAnalytics_di" bpmnElement="Flow_33_FeedbackToAnalytics">
+        <di:waypoint x="1840" y="200"/>
+        <di:waypoint x="1840" y="975"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_34_TriggerAudit_di" bpmnElement="Flow_34_TriggerAudit">
+        <di:waypoint x="1830" y="1000"/>
+        <di:waypoint x="1860" y="1000"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_35_AuditGate_di" bpmnElement="Flow_35_AuditGate">
+        <di:waypoint x="1990" y="1000"/>
+        <di:waypoint x="2020" y="1000"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_36_IncYes_di" bpmnElement="Flow_36_IncYes">
+        <di:waypoint x="2045" y="975"/>
+        <di:waypoint x="2045" y="960"/>
+        <di:waypoint x="2090" y="960"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_37_IncNo_di" bpmnElement="Flow_37_IncNo">
+        <di:waypoint x="2045" y="1025"/>
+        <di:waypoint x="2045" y="1020"/>
+        <di:waypoint x="2140" y="1020"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_38_IncEnd_di" bpmnElement="Flow_38_IncEnd">
+        <di:waypoint x="2150" y="990"/>
+        <di:waypoint x="2158" y="990"/>
+        <di:waypoint x="2158" y="1002"/>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
