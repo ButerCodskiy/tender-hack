@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from src.analytics.schemas import (
     AnalyticsDashboardResponseSchema,
     OperatorDailyMetricResponseSchema,
+    SystemicIssuesReportResponseSchema,
     SystemIncidentResponseSchema,
 )
 from src.analytics.service import EXPORT_MAX_DAYS
@@ -35,6 +36,27 @@ async def get_dashboard(
 ) -> AnalyticsDashboardResponseSchema:
     """Возвращает сводные метрики дашборда за указанный период дат."""
     return await analytics_service.get_dashboard(
+        from_date=from_date,
+        to_date=to_date,
+    )
+
+
+@router.get(
+    "/systemic-issues",
+    summary="Аналитическое заключение по выявлению системных проблем",
+    description="Агрегирует закрытые диалоги, отзывы клиентов, сбои платформы и формирует структурированное заключение для руководства.",
+)
+async def get_systemic_issues_report(
+    analytics_service: AnalyticsServiceDep,
+    from_date: Annotated[
+        date | None, Query(description="Начало периода отчета")
+    ] = None,
+    to_date: Annotated[
+        date | None, Query(description="Конец периода отчета")
+    ] = None,
+) -> SystemicIssuesReportResponseSchema:
+    """Формирует структурированный аналитический отчет о системных проблемах за указанный период."""
+    return await analytics_service.generate_systemic_issues_report(
         from_date=from_date,
         to_date=to_date,
     )

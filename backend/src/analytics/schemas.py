@@ -307,3 +307,70 @@ class DailyMetricsPayloadSchema(BaseModel):
         None,
         description="Идентификатор конкретного сотрудника для точечного перерасчета",
     )
+
+
+class SystemicIssueItemSchema(BaseModel):
+    """Схема выявленной системной проблемы платформы или регламентов."""
+
+    title: str = Field(..., description="Название системной проблемы")
+    evidence_count: int = Field(
+        ..., description="Число зафиксированных жалоб/тикетов"
+    )
+    affected_line: Literal["L1", "L2", "L3"] = Field(
+        ..., description="Затронутая линия поддержки: L1, L2 или L3"
+    )
+    suspected_cause: str = Field(
+        ..., description="Предполагаемая первопричина сбоя или трудности"
+    )
+    examples: list[str] = Field(
+        default_factory=list,
+        description="Цитаты и выдержки из обращений пользователей",
+    )
+    recommendation: str = Field(
+        ...,
+        description="Конкретная рекомендация для методистов или разработчиков Портала",
+    )
+
+
+class SystemicMetricsSummarySchema(BaseModel):
+    """Сводные нормализованные показатели эффективности работы поддержки."""
+
+    total_tickets: int = Field(
+        ..., description="Общее число тикетов за период"
+    )
+    csat_score: float = Field(
+        ...,
+        description="Нормализованный CSAT (доля_лайков + средний_балл_звезд / 5.0) / 2.0",
+    )
+    deflection_rate: float = Field(
+        ...,
+        description="Доля обращений, закрытых ботом без эскалации на оператора",
+    )
+    oqs_score: float = Field(
+        ...,
+        description="Интегральная оценка качества работы поддержки OQS (Operator Quality Score)",
+    )
+
+
+class SystemicIssuesReportResponseSchema(BaseModel):
+    """Итоговое структурированное аналитическое заключение по системным проблемам."""
+
+    period: str = Field(
+        ...,
+        description="Анализируемый период (например, 2026-09-01 - 2026-09-12)",
+    )
+    summary: str = Field(
+        ...,
+        description="Краткий аналитический обзор ключевых проблем пользователей",
+    )
+    systemic_issues: list[SystemicIssueItemSchema] = Field(
+        default_factory=list,
+        description="Кластеризованные системные проблемы",
+    )
+    metrics_summary: SystemicMetricsSummarySchema = Field(
+        ..., description="Сводные метрики эффективности"
+    )
+    positive_patterns: list[str] = Field(
+        default_factory=list,
+        description="Положительные паттерны и зоны успешного обслуживания",
+    )

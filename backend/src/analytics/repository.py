@@ -476,3 +476,125 @@ class AnalyticsRepository:
             .order_by(TicketModel.created_at.asc())
         )
         return list((await self.session.scalars(stmt)).unique().all())
+
+    async def get_systemic_issues_raw_data(
+        self,
+        from_dt: datetime,
+        to_dt: datetime,
+    ) -> dict[str, Any]:
+        """Собирает агрегированные показатели и выборку обращений для анализа системных проблем.
+
+        1. Агрегирует общее число обращений, закрытых ботом, и распределение оценок.
+        2. Извлекает выборку проблемных тикетов (score <= 3, системные инциденты, сбои платформы).
+        3. Извлекает выборку положительных обращений для фиксации лучших практик.
+        """
+        # 1. Агрегатные счетчики
+        stmt_totals = select(
+            func.count(TicketModel.id).label("total_tickets"),
+            func.count(TicketModel.id)
+            .filter(
+                TicketModel.status == "resolved",
+                TicketModel.assigned_operator_id.is_(None),
+            )
+            .label("bot_resolved_tickets"),
+        ).where(
+            TicketModel.created_at >= from_dt,
+            TicketModel.created_at <= to_dt,
+        )
+        totals_row = (await self.session.execute(stmt_totals)).one()
+        total_tickets = totals_row.total_tickets or 0
+        bot_resolved_tickets = totals_row.bot_resolved_tickets or 0
+
+        # 2. Оценки клиентов за период
+        stmt_feedbacks = (
+            select(TicketFeedbackModel.score)
+            .join(TicketModel, TicketModel.id == TicketFeedbackModel.ticket_id)
+            .where(
+                TicketModel.created_at >= from_dt,
+                TicketModel.created_at <= to_dt,
+            )
+        )
+        feedback_scores = list(
+            (await self.session.scalars(stmt_feedbacks)).all()
+        )
+
+        # 3. Проблемные тикеты для кластеризации
+        stmt_problems = (
+            select(TicketModel)
+            .outerjoin(
+                TicketFeedbackModel,
+                TicketFeedbackModel.ticket_id == TicketModel.id,
+            )
+            .outerjoin(
+                TicketAuditModel,
+                TicketAuditModel.ticket_id == TicketModel.id,
+            )
+            .outerjoin(
+                SystemIncidentModel,
+                SystemIncidentModel.ticket_id == TicketModel.id,
+            )
+            .where(
+                TicketModel.created_at >= from_dt,
+                TicketModel.created_at <= to_dt,
+                (
+                    (TicketFeedbackModel.score <= 3)
+                    | (TicketAuditModel.is_system_issue.is_(True))
+                    | (SystemIncidentModel.id.is_not(None))
+                    | (
+                        TicketAuditModel.root_cause.in_(
+                            ["system_issue", "operator_error"]
+                        )
+                    )
+                ),
+            )
+            .options(
+                selectinload(TicketModel.messages),
+                selectinload(TicketModel.feedback),
+                selectinload(TicketModel.audit),
+                selectinload(TicketModel.incidents),
+                selectinload(TicketModel.line),
+            )
+            .order_by(TicketModel.created_at.desc())
+            .limit(200)
+        )
+        problem_tickets = list(
+            (await self.session.scalars(stmt_problems)).unique().all()
+        )
+
+        # 4. Положительные тикеты для выявления зон успеха (positive_patterns)
+        stmt_positive = (
+            select(TicketModel)
+            .outerjoin(
+                TicketFeedbackModel,
+                TicketFeedbackModel.ticket_id == TicketModel.id,
+            )
+            .where(
+                TicketModel.created_at >= from_dt,
+                TicketModel.created_at <= to_dt,
+                (
+                    (TicketFeedbackModel.score >= 4)
+                    | (
+                        (TicketModel.status == "resolved")
+                        & (TicketModel.assigned_operator_id.is_(None))
+                    )
+                ),
+            )
+            .options(
+                selectinload(TicketModel.messages),
+                selectinload(TicketModel.feedback),
+                selectinload(TicketModel.line),
+            )
+            .order_by(TicketModel.created_at.desc())
+            .limit(50)
+        )
+        positive_tickets = list(
+            (await self.session.scalars(stmt_positive)).unique().all()
+        )
+
+        return {
+            "total_tickets": total_tickets,
+            "bot_resolved_tickets": bot_resolved_tickets,
+            "feedback_scores": feedback_scores,
+            "problem_tickets": problem_tickets,
+            "positive_tickets": positive_tickets,
+        }
