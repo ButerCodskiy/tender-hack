@@ -247,10 +247,24 @@ class HybridEmbeddingService:
         try:
             from transformers import AutoModel, AutoTokenizer
 
-            logger.info("Загрузка модели эмбеддингов %s...", self.model_name)
+            device = getattr(settings, "EMBEDDING_DEVICE", "cpu")
+            if device == "cuda":
+                import torch
+
+                if not torch.cuda.is_available():
+                    device = "cpu"
+
+            logger.info(
+                "Загрузка модели эмбеддингов %s на устройство %s...",
+                self.model_name,
+                device,
+            )
             self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-            self._dense_model = AutoModel.from_pretrained(self.model_name)
+            self._dense_model = AutoModel.from_pretrained(self.model_name).to(
+                device
+            )
             self._dense_model.eval()
+            self._device = device
             logger.info(
                 "Модель эмбеддингов %s успешно загружена.", self.model_name
             )
@@ -269,6 +283,7 @@ class HybridEmbeddingService:
             try:
                 import torch
 
+                device = getattr(self, "_device", "cpu")
                 with torch.no_grad():
                     inputs = self._tokenizer(
                         [text],
@@ -276,7 +291,7 @@ class HybridEmbeddingService:
                         truncation=True,
                         max_length=512,
                         return_tensors="pt",
-                    )
+                    ).to(device)
                     outputs = self._dense_model(**inputs)
                     cls_emb = outputs.last_hidden_state[:, 0]
                     norm_emb = torch.nn.functional.normalize(
