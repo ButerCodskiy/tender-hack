@@ -73,7 +73,7 @@ class Settings(BaseSettings):
     # Ollama и генеративный контур (RTX 4060 Host)
     OLLAMA_BASE_URL: str = "http://192.168.1.244:9117"
     OLLAMA_MODEL: str = "qwen3.5:4b-instruct"
-    OLLAMA_TIMEOUT_SECONDS: float = 60.0
+    OLLAMA_TIMEOUT_SECONDS: float = 300.0
 
     # Эмбеддинги (bge-m3 1024D)
     EMBEDDING_MODEL_NAME: str = "BAAI/bge-m3"
