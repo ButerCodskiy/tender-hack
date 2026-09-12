@@ -890,7 +890,9 @@ async def seed() -> None:
         stmt_kb = select(func.count()).select_from(KbDocumentModel)
         kb_docs_count = (await session.scalars(stmt_kb)).first() or 0
         if kb_docs_count == 0:
-            logger.info("Таблица kb_documents пуста. Выполняется авто-сидирование базы знаний...")
+            logger.info(
+                "Таблица kb_documents пуста. Выполняется авто-сидирование базы знаний..."
+            )
             sql_paths = [
                 Path("storage/kb_data.sql"),
                 Path("/app/storage/kb_data.sql"),
@@ -899,7 +901,9 @@ async def seed() -> None:
             ]
             for sql_p in sql_paths:
                 if sql_p.exists():
-                    logger.info("Найден дамп базы знаний: %s. Импорт...", sql_p)
+                    logger.info(
+                        "Найден дамп базы знаний: %s. Импорт...", sql_p
+                    )
                     sql_content = sql_p.read_text(encoding="utf-8")
                     for statement in sql_content.split(";\n"):
                         clean_stmt = statement.strip()
@@ -911,9 +915,13 @@ async def seed() -> None:
                             try:
                                 await session.execute(text(clean_stmt))
                             except Exception as ex:
-                                logger.debug("Игнорирование ошибки вставки: %s", ex)
+                                logger.debug(
+                                    "Игнорирование ошибки вставки: %s", ex
+                                )
                     await session.commit()
-                    logger.info("Авто-сидирование базы знаний успешно завершено.")
+                    logger.info(
+                        "Авто-сидирование базы знаний успешно завершено."
+                    )
                     break
 
         await session.commit()
