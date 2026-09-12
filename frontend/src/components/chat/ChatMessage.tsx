@@ -58,20 +58,20 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   // 1. Thinking / Loading State
   if (message.type === 'thinking') {
     return (
-      <div className="flex flex-col space-y-3 py-4 animate-in fade-in duration-200">
+      <div className="flex flex-col space-y-2 py-3 bg-white border border-[#e5e5e5] rounded-none p-3.5">
         <div className="flex items-center gap-2">
-          <div className="size-6 rounded-lg bg-primary-50 flex items-center justify-center text-primary-600">
+          <div className="size-6 rounded-none bg-[#fef0ef] text-[#db2b21] flex items-center justify-center">
             <Sparkles className="size-3.5" />
           </div>
-          <span className="text-xs font-semibold text-text-100">
-            ИИ-Ассистент Портала
+          <span className="text-xs font-bold text-[#264b82]">
+            ИИ-Ассистент Портала Поставщиков
           </span>
         </div>
         <div className="flex items-center gap-1.5 pl-8">
-          <div className="size-2 rounded-full bg-primary-400 animate-bounce [animation-delay:-0.3s]" />
-          <div className="size-2 rounded-full bg-primary-400 animate-bounce [animation-delay:-0.15s]" />
-          <div className="size-2 rounded-full bg-primary-400 animate-bounce" />
-          <span className="text-xs text-primary-700/80 font-medium ml-2 animate-pulse">
+          <div className="size-1.5 bg-[#264b82] animate-bounce [animation-delay:-0.3s]" />
+          <div className="size-1.5 bg-[#264b82] animate-bounce [animation-delay:-0.15s]" />
+          <div className="size-1.5 bg-[#264b82] animate-bounce" />
+          <span className="text-xs text-[#264b82] font-semibold ml-2">
             {message.statusText || 'Поиск по базе регламентов...'}
           </span>
         </div>
@@ -82,12 +82,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   // 2. System State
   if (message.type === 'system') {
     return (
-      <div className="my-4 flex justify-center">
-        <div className="max-w-xl px-4 py-2.5 rounded-2xl bg-amber-50 border border-amber-200/80 text-amber-900 text-xs md:text-sm flex items-start gap-2.5 shadow-xs">
-          <AlertTriangle className="size-4.5 text-amber-600 shrink-0 mt-0.5" />
+      <div className="my-3 flex justify-center">
+        <div className="max-w-xl px-4 py-2 rounded-none bg-[#fffbe6] border border-[#fbbd08]/50 text-[#1a1a1a] text-xs flex items-start gap-2.5">
+          <AlertTriangle className="size-4 text-[#f67319] shrink-0 mt-0.5" />
           <div>
-            <span className="font-semibold block mb-0.5">Системное уведомление</span>
-            <p className="leading-relaxed">{message.content}</p>
+            <span className="font-bold block mb-0.5 text-[#1a1a1a]">Системное уведомление</span>
+            <p className="leading-relaxed text-[#555555]">{message.content}</p>
           </div>
         </div>
       </div>
@@ -97,14 +97,14 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   // 3. User Message
   if (message.type === 'user') {
     return (
-      <div className="flex justify-end py-3 group w-full min-w-0">
+      <div className="flex justify-end py-2 group w-full min-w-0">
         <div className="w-full max-w-2xl flex flex-col items-end min-w-0">
           {isEditing ? (
-            <div className="w-full bg-background-soft-100 rounded-3xl rounded-tr-md p-3 border border-gray-200">
+            <div className="w-full bg-white rounded-none p-3 border border-[#264b82]">
               <textarea
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
-                className="w-full bg-transparent text-sm md:text-base text-title-50 outline-none resize-none min-h-[80px] p-2"
+                className="w-full bg-transparent text-[14px] text-[#1a1a1a] outline-none resize-none min-h-[80px] p-2 border border-[#d4d4d5]"
               />
               <div className="flex justify-end gap-2 mt-2">
                 <button
@@ -113,14 +113,14 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                     setIsEditing(false);
                     setEditContent(message.content);
                   }}
-                  className="px-3 py-1.5 text-xs font-medium rounded-lg text-gray-600 hover:bg-gray-200 transition cursor-pointer"
+                  className="px-3 py-1.5 text-xs font-bold rounded-none text-[#1a1a1a] border border-[#22242626] hover:bg-[#f2f7fc] transition cursor-pointer"
                 >
                   Отмена
                 </button>
                 <button
                   type="button"
                   onClick={handleSaveEdit}
-                  className="px-3 py-1.5 text-xs font-medium rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition cursor-pointer shadow-xs"
+                  className="px-3 py-1.5 text-xs font-bold rounded-none bg-[#db2b21] hover:bg-[#cd1f15] text-white transition cursor-pointer"
                 >
                   Сохранить
                 </button>
@@ -128,21 +128,21 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
             </div>
           ) : (
             <>
-              <div className="bg-background-soft-100 rounded-3xl rounded-tr-md px-5 py-3.5 text-title-50 text-sm md:text-base shadow-2xs max-w-full min-w-0 break-words">
+              <div className="bg-[#eaf6ff] border border-[#b9dbf7] rounded-none px-4 py-3 text-[#1a1a1a] text-[14px] max-w-full min-w-0 break-words">
                 <p className="whitespace-pre-wrap leading-relaxed break-words [overflow-wrap:anywhere]">{message.content}</p>
               </div>
 
               {/* Action Buttons */}
-              <div className="mt-1.5 flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
-                <span className="text-[11px] text-gray-400 mr-1">{message.timestamp}</span>
+              <div className="mt-1 flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                <span className="text-[11px] text-[#7f8792] mr-1">{message.timestamp}</span>
 
                 <button
                   type="button"
                   onClick={handleCopy}
                   title="Копировать"
-                  className="size-7 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition cursor-pointer"
+                  className="size-6 rounded-none flex items-center justify-center text-[#7f8792] hover:text-[#1a1a1a] hover:bg-[#f2f7fc] transition cursor-pointer"
                 >
-                  {isCopied ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
+                  {isCopied ? <Check className="size-3.5 text-[#0d9b68]" /> : <Copy className="size-3.5" />}
                 </button>
 
                 {onEditMessage && (
@@ -150,7 +150,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                     type="button"
                     onClick={() => setIsEditing(true)}
                     title="Редактировать вопрос"
-                    className="size-7 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition cursor-pointer"
+                    className="size-6 rounded-none flex items-center justify-center text-[#7f8792] hover:text-[#1a1a1a] hover:bg-[#f2f7fc] transition cursor-pointer"
                   >
                     <Pencil className="size-3.5" />
                   </button>
@@ -165,53 +165,53 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 
   // 4. Assistant Message
   return (
-    <div className="flex flex-col space-y-3 py-4 group w-full min-w-0">
+    <div className="flex flex-col space-y-2 py-3 group w-full min-w-0">
       {/* Bot Header */}
       <div className="flex items-center gap-2">
-        <div className="size-6 rounded-lg bg-gradient-to-tr from-primary-600 to-primary-400 flex items-center justify-center text-white shadow-2xs shrink-0">
+        <div className="size-6 rounded-none bg-[#264b82] flex items-center justify-center text-white shrink-0">
           <Sparkles className="size-3.5" />
         </div>
-        <span className="text-xs font-semibold text-title-50 truncate">
+        <span className="text-xs font-bold text-[#264b82] truncate">
           ИИ-Ассистент Портала Поставщиков
         </span>
-        <span className="text-[11px] text-gray-400 ml-auto shrink-0">{message.timestamp}</span>
+        <span className="text-[11px] text-[#7f8792] ml-auto shrink-0">{message.timestamp}</span>
       </div>
 
-      {/* Message Content */}
-      <div className="pl-8 text-title-50 text-sm md:text-base leading-relaxed space-y-3 min-w-0">
+      {/* Message Content Bubble */}
+      <div className="bg-white border border-[#e5e5e5] rounded-none p-4 text-[#1a1a1a] text-[14px] leading-relaxed space-y-3 min-w-0">
         <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
           {message.content}
           {message.isStreaming && (
             <span
               aria-hidden="true"
-              className="inline-block w-1.5 h-4 ml-1 bg-primary-600 animate-pulse rounded-xs align-middle"
+              className="inline-block w-1.5 h-4 ml-1 bg-[#db2b21] animate-pulse align-middle"
             />
           )}
         </div>
 
         {/* RAG Citations */}
         {message.citations && message.citations.length > 0 && (
-          <div className="mt-4 pt-3 border-t border-gray-100 space-y-2 animate-in fade-in duration-300">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-500">
-              <BookOpen className="size-3.5 text-primary-500" />
-              <span>Источники из базы знаний:</span>
+          <div className="mt-3 pt-3 border-t border-[#e5e5e5] space-y-2">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-[#264b82]">
+              <BookOpen className="size-3.5 text-[#264b82]" />
+              <span>Источники из регламентов:</span>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               {message.citations.map((citation) => (
                 <div
                   key={citation.id}
-                  className="p-2.5 rounded-xl bg-gray-50 border border-gray-200/60 text-xs hover:border-primary-200 transition"
+                  className="p-2.5 rounded-none bg-[#f7f8f9] border border-[#dddddd] text-xs hover:border-[#264b82] transition"
                 >
-                  <span className="font-semibold text-gray-800 block truncate">
+                  <span className="font-bold text-[#1a1a1a] block truncate">
                     {citation.title}
                   </span>
                   {citation.sectionPath && (
-                    <span className="text-[11px] text-gray-500 block truncate mt-0.5">
+                    <span className="text-[11px] text-[#7f8792] block truncate mt-0.5">
                       {citation.sectionPath}
                     </span>
                   )}
                   {citation.excerpt && (
-                    <p className="text-[11px] text-gray-600 italic mt-1 line-clamp-2">
+                    <p className="text-[11px] text-[#555555] italic mt-1 line-clamp-2">
                       «{citation.excerpt}»
                     </p>
                   )}
@@ -221,113 +221,113 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           </div>
         )}
 
-        {/* TailGrids Feedback Toolbar (Shown only after streaming completes) */}
+        {/* Action Toolbar */}
         {!message.isStreaming && message.content.length > 0 && (
-          <div className="pt-2 flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-200">
+          <div className="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-[#e5e5e5]">
             <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={handleCopy}
-              title="Копировать ответ"
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition cursor-pointer"
-            >
-              {isCopied ? (
-                <>
-                  <Check className="size-3.5 text-emerald-600" />
-                  <span className="text-emerald-600">Скопировано!</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="size-3.5" />
-                  <span>Копировать</span>
-                </>
-              )}
-            </button>
-
-            {onRegenerate && (
               <button
                 type="button"
-                onClick={() => onRegenerate(message.id)}
-                title="Перегенерировать ответ"
-                className="size-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition cursor-pointer"
+                onClick={handleCopy}
+                title="Копировать ответ"
+                className="flex items-center gap-1 px-2 py-1 rounded-none text-xs font-semibold text-[#7f8792] hover:text-[#1a1a1a] hover:bg-[#f2f7fc] transition cursor-pointer"
               >
-                <RotateCw className="size-3.5" />
+                {isCopied ? (
+                  <>
+                    <Check className="size-3.5 text-[#0d9b68]" />
+                    <span className="text-[#0d9b68]">Скопировано</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="size-3.5" />
+                    <span>Копировать</span>
+                  </>
+                )}
               </button>
-            )}
 
-            {/* Thumbs Up / Down */}
-            <div className="flex items-center border-l border-gray-200 pl-1 ml-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setFeedbackGiven('positive');
-                  onFeedback?.(message.id, true);
-                }}
-                title="Полезный ответ"
-                className={`size-7 rounded-lg flex items-center justify-center transition cursor-pointer ${
-                  feedbackGiven === 'positive'
-                    ? 'text-emerald-600 bg-emerald-50'
-                    : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
-                }`}
-              >
-                <ThumbsUp className="size-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setFeedbackGiven('negative');
-                  onFeedback?.(message.id, false);
-                }}
-                title="Ответ не помог"
-                className={`size-7 rounded-lg flex items-center justify-center transition cursor-pointer ${
-                  feedbackGiven === 'negative'
-                    ? 'text-red-600 bg-red-50'
-                    : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
-                }`}
-              >
-                <ThumbsDown className="size-3.5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Business Action Buttons: Вопрос решен / Позвать специалиста */}
-          {message.needsFeedbackButtons && (
-            <div className="flex items-center gap-2">
-              {onResolveTicket && (
+              {onRegenerate && (
                 <button
                   type="button"
-                  onClick={onResolveTicket}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/70 hover:bg-emerald-100 transition cursor-pointer shadow-2xs active:scale-95"
+                  onClick={() => onRegenerate(message.id)}
+                  title="Перегенерировать ответ"
+                  className="size-6 rounded-none flex items-center justify-center text-[#7f8792] hover:text-[#1a1a1a] hover:bg-[#f2f7fc] transition cursor-pointer"
                 >
-                  <CheckCircle2 className="size-3.5 text-emerald-600" />
-                  <span>Вопрос решен</span>
+                  <RotateCw className="size-3.5" />
                 </button>
               )}
 
-              {onEscalateToOperator && (
-                isEscalated ? (
-                  <span
-                    title="Специалист уже вызван и подключается к диалогу"
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200 cursor-not-allowed select-none"
-                  >
-                    <Headphones className="size-3.5 text-gray-400" />
-                    <span>Специалист вызван</span>
-                  </span>
-                ) : (
+              {/* Thumbs Up / Down */}
+              <div className="flex items-center border-l border-[#dddddd] pl-1 ml-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFeedbackGiven('positive');
+                    onFeedback?.(message.id, true);
+                  }}
+                  title="Полезный ответ"
+                  className={`size-6 rounded-none flex items-center justify-center transition cursor-pointer ${
+                    feedbackGiven === 'positive'
+                      ? 'text-[#0d9b68] bg-[#e7f8f2]'
+                      : 'text-[#7f8792] hover:text-[#1a1a1a] hover:bg-[#f2f7fc]'
+                  }`}
+                >
+                  <ThumbsUp className="size-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFeedbackGiven('negative');
+                    onFeedback?.(message.id, false);
+                  }}
+                  title="Ответ не помог"
+                  className={`size-6 rounded-none flex items-center justify-center transition cursor-pointer ${
+                    feedbackGiven === 'negative'
+                      ? 'text-[#db2b21] bg-[#fef0ef]'
+                      : 'text-[#7f8792] hover:text-[#1a1a1a] hover:bg-[#f2f7fc]'
+                  }`}
+                >
+                  <ThumbsDown className="size-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Business Action Buttons: Вопрос решен / Позвать специалиста */}
+            {message.needsFeedbackButtons && (
+              <div className="flex items-center gap-2">
+                {onResolveTicket && (
                   <button
                     type="button"
-                    onClick={onEscalateToOperator}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-primary-50 text-primary-600 border border-primary-200/70 hover:bg-primary-100 transition cursor-pointer shadow-2xs active:scale-95"
+                    onClick={onResolveTicket}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-none text-xs font-bold text-[#0d9b68] bg-transparent hover:bg-[#e7f8f2] border border-[#0d9b68] transition cursor-pointer"
                   >
-                    <Headphones className="size-3.5 text-primary-500" />
-                    <span>Позвать специалиста</span>
+                    <CheckCircle2 className="size-3.5 text-[#0d9b68]" />
+                    <span>Вопрос решен</span>
                   </button>
-                )
-              )}
-            </div>
-          )}
-        </div>
-      )}
+                )}
+
+                {onEscalateToOperator && (
+                  isEscalated ? (
+                    <span
+                      title="Специалист уже вызван и подключается к диалогу"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-none text-xs font-bold bg-[#eeeeee] text-[#7f8792] border border-[#d4d4d5] cursor-not-allowed select-none"
+                    >
+                      <Headphones className="size-3.5 text-[#7f8792]" />
+                      <span>Специалист вызван</span>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={onEscalateToOperator}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-none text-xs font-bold text-[#264b82] bg-transparent hover:bg-[#eaf6ff] border border-[#264b82] transition cursor-pointer"
+                    >
+                      <Headphones className="size-3.5 text-[#264b82]" />
+                      <span>Позвать специалиста</span>
+                    </button>
+                  )
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

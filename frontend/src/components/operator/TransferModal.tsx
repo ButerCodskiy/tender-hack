@@ -14,21 +14,21 @@ const SUPPORT_LINES = [
     name: 'Линия 1 — Первичная поддержка',
     description: 'Общие регламенты 44/223-ФЗ, навигация, регистрация',
     icon: ShieldAlert,
-    color: 'text-primary-600 bg-primary-50 border-primary-200',
+    color: 'text-[#264b82] bg-[#eaf6ff] border-[#b9dbf7]',
   },
   {
     code: 'L2',
     name: 'Линия 2 — Технические инциденты',
     description: 'Сбои ЭЦП, КриптоПро, интеграции с ЕИС/ФНС, ошибки сервера',
     icon: Wrench,
-    color: 'text-amber-600 bg-amber-50 border-amber-200',
+    color: 'text-[#b45309] bg-[#fef3c7] border-[#fde68a]',
   },
   {
     code: 'L3',
     name: 'Линия 3 — Юридический арбитраж',
     description: 'Разногласия по протоколам, жалобы УФАС, срыв сроков контракта',
     icon: Scale,
-    color: 'text-purple-600 bg-purple-50 border-purple-200',
+    color: 'text-[#6b21a8] bg-[#f3e8ff] border-[#e9d5ff]',
   },
 ];
 
@@ -59,28 +59,28 @@ export const TransferModal: React.FC<TransferModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="w-full max-w-lg bg-white rounded-3xl border border-gray-100 shadow-2xl p-6 overflow-hidden">
-        <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+      <div className="w-full max-w-lg bg-white rounded-none border border-[#22242626] shadow-xl p-6 overflow-hidden">
+        <div className="flex items-center justify-between pb-4 border-b border-[#e5e5e5]">
           <div className="flex items-center gap-2.5">
-            <div className="size-9 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center">
-              <ArrowRightLeft className="size-5" />
+            <div className="size-8 rounded-none bg-[#eaf6ff] text-[#264b82] flex items-center justify-center">
+              <ArrowRightLeft className="size-4.5" />
             </div>
             <div>
-              <h3 className="text-base font-semibold text-title-50">Перевод обращения на другую линию</h3>
-              <p className="text-xs text-text-100">Выберите профильную линию и укажите комментарий для коллег</p>
+              <h3 className="text-sm font-bold text-[#1a1a1a]">Перевод обращения на другую линию</h3>
+              <p className="text-xs text-[#666666]">Выберите профильную линию и укажите комментарий для коллег</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="size-8 rounded-xl flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition cursor-pointer"
+            className="size-7 rounded-none flex items-center justify-center text-[#666666] hover:text-[#1a1a1a] hover:bg-[#f7f8f9] transition cursor-pointer"
           >
-            <X className="size-4.5" />
+            <X className="size-4" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="mt-5 space-y-4">
           <div className="space-y-2">
-            <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400">
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-[#666666]">
               Целевая линия поддержки
             </label>
             <div className="space-y-2">
@@ -92,12 +92,12 @@ export const TransferModal: React.FC<TransferModalProps> = ({
                 return (
                   <label
                     key={line.code}
-                    className={`flex items-start gap-3 p-3 rounded-2xl border transition-all cursor-pointer ${
+                    className={`flex items-start gap-3 p-3 rounded-none border transition-all cursor-pointer ${
                       isSelected
-                        ? 'border-primary-500 bg-primary-50/40 shadow-xs ring-1 ring-primary-500'
+                        ? 'border-[#264b82] bg-[#eaf6ff]'
                         : isCurrent
-                        ? 'border-gray-100 bg-gray-50/50 opacity-60'
-                        : 'border-gray-200/80 hover:border-gray-300 bg-white'
+                        ? 'border-[#e5e5e5] bg-[#f7f8f9] opacity-60'
+                        : 'border-[#d4d4d5] hover:border-[#264b82] bg-white'
                     }`}
                   >
                     <input
@@ -107,18 +107,18 @@ export const TransferModal: React.FC<TransferModalProps> = ({
                       checked={isSelected}
                       disabled={isCurrent}
                       onChange={(e) => setSelectedLine(e.target.value)}
-                      className="mt-1 size-4 text-primary-600 focus:ring-primary-500"
+                      className="mt-1 size-4 accent-[#264b82] text-[#264b82] focus:ring-[#264b82]"
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className={`size-5 rounded-md flex items-center justify-center text-xs font-bold border ${line.color}`}>
+                        <span className={`size-5 rounded-none flex items-center justify-center text-xs font-bold border ${line.color}`}>
                           <Icon className="size-3" />
                         </span>
-                        <span className="text-xs font-bold text-title-50">
+                        <span className="text-xs font-bold text-[#1a1a1a]">
                           {line.name} {isCurrent && '(Текущая)'}
                         </span>
                       </div>
-                      <p className="text-[11px] text-text-100 mt-1 leading-normal">
+                      <p className="text-[11px] text-[#666666] mt-1 leading-normal">
                         {line.description}
                       </p>
                     </div>
@@ -129,7 +129,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400">
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-[#666666]">
               Комментарий оператора (причина перевода)
             </label>
             <textarea
@@ -137,22 +137,22 @@ export const TransferModal: React.FC<TransferModalProps> = ({
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               placeholder="Например: Ошибка валидации плагина КриптоПро 0x80090014, требуется помощь инженера L2..."
-              className="w-full text-xs md:text-sm rounded-2xl border border-gray-200 bg-gray-50/50 p-3 focus:bg-white focus:outline-hidden focus:border-primary-500 focus:ring-2 focus:ring-primary-100 transition resize-none"
+              className="w-full text-xs rounded-none border border-[#d4d4d5] bg-white p-3 focus:outline-hidden focus:border-[#264b82] transition resize-none text-[#1a1a1a]"
             />
           </div>
 
-          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
+          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#e5e5e5]">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs font-medium text-text-100 hover:bg-gray-100 transition cursor-pointer"
+              className="px-4 py-2 rounded-none border border-[#d4d4d5] text-xs font-semibold text-[#1a1a1a] hover:bg-[#f7f8f9] transition cursor-pointer"
             >
               Отмена
             </button>
             <button
               type="submit"
               disabled={isSubmitting || selectedLine === currentLineCode}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white text-xs font-semibold shadow-xs transition cursor-pointer"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-none bg-[#db2b21] hover:bg-[#b8231a] disabled:opacity-50 text-white text-xs font-bold transition cursor-pointer"
             >
               <ArrowRightLeft className="size-3.5" />
               <span>{isSubmitting ? 'Перевод...' : 'Перевести обращение'}</span>

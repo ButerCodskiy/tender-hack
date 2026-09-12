@@ -643,8 +643,8 @@ export const App: React.FC = () => {
   }
 
   return (
-    <div className="flex h-dvh w-full bg-[#f9fafb] text-text-50 font-['Inter',sans-serif] overflow-hidden">
-      {/* Collapsible Sidebar matching TailGrids */}
+    <div className="flex h-dvh w-full bg-[#f7f8f9] text-[#1a1a1a] font-sans overflow-hidden">
+      {/* Collapsible Sidebar */}
       <Sidebar
         isCollapsed={isCollapsed}
         onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
@@ -670,22 +670,22 @@ export const App: React.FC = () => {
       />
 
       {/* Main Workspace Container */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden p-2 md:p-3">
-        <div className="flex-1 flex flex-col bg-white rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)] overflow-hidden relative">
+      <main className="flex-1 flex flex-col h-full overflow-hidden p-0 md:p-2 bg-[#f7f8f9]">
+        <div className="flex-1 flex flex-col bg-white rounded-none border border-[#e5e5e5] overflow-hidden relative shadow-none">
           {/* Top Bar for active chat */}
           {activeSession && (
-            <header className="px-6 py-3.5 border-b border-gray-100 flex items-center justify-between shrink-0 bg-white/80 backdrop-blur-xs z-10">
+            <header className="px-5 py-3 border-b border-[#e5e5e5] flex items-center justify-between shrink-0 bg-white z-10">
               <div className="flex items-center gap-3 overflow-hidden">
-                <div className="size-8 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center shrink-0">
+                <div className="size-8 rounded-none bg-[#fef0ef] text-[#db2b21] border border-[#db2b21]/20 flex items-center justify-center shrink-0">
                   <Sparkles className="size-4" />
                 </div>
                 <div className="truncate">
-                  <h2 className="text-sm font-semibold text-title-50 truncate">
+                  <h2 className="text-sm font-bold text-[#1a1a1a] truncate">
                     {activeSession.title}
                   </h2>
-                  <div className="flex items-center gap-2 text-xs text-text-100">
-                    <span className="flex items-center gap-1">
-                      <ShieldCheck className="size-3 text-emerald-500" />
+                  <div className="flex items-center gap-2 text-xs text-[#7f8792]">
+                    <span className="flex items-center gap-1 font-medium">
+                      <ShieldCheck className="size-3 text-[#0d9b68]" />
                       {activeSession.status === 'resolved'
                         ? 'Вопрос решен'
                         : activeSession.status === 'escalated_to_operator'
@@ -708,15 +708,15 @@ export const App: React.FC = () => {
                       ? 'Автономный режим (UI Mock). Кликните для переключения на бэкенд API.'
                       : 'Режим связи с бэкендом (API). Кликните для переключения в Демо.'
                   }
-                  className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border transition cursor-pointer hover:opacity-90 ${
+                  className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-bold border transition cursor-pointer hover:opacity-90 ${
                     standalone
-                      ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
-                      : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                      ? 'bg-[#eaf6ff] text-[#264b82] border-[#264b82]/30'
+                      : 'bg-[#e7f8f2] text-[#0d9b68] border-[#0d9b68]/30'
                   }`}
                 >
                   <span
                     className={`size-1.5 rounded-full ${
-                      standalone ? 'bg-blue-500' : 'bg-emerald-500'
+                      standalone ? 'bg-[#264b82]' : 'bg-[#0d9b68]'
                     }`}
                   />
                   <span>{standalone ? 'Автономный' : 'API'}</span>
@@ -726,22 +726,22 @@ export const App: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleEscalateToOperator}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 border border-gray-200 transition cursor-pointer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-none text-xs font-bold text-[#264b82] bg-transparent hover:bg-[#eaf6ff] border border-[#264b82] transition cursor-pointer"
                   >
-                    <Headphones className="size-3.5 text-primary-500" />
+                    <Headphones className="size-3.5 text-[#264b82]" />
                     <span className="hidden sm:inline">Вызвать оператора</span>
                   </button>
                 )}
 
                 {activeSession.status === 'escalated_to_operator' && (
                   operatorName ? (
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
-                      <UserCheck className="size-3.5 text-emerald-600" />
+                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#e7f8f2] text-[#0d9b68] border border-[#0d9b68]/30">
+                      <UserCheck className="size-3.5 text-[#0d9b68]" />
                       <span>Специалист: <strong>{operatorName}</strong></span>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
-                      <Headphones className="size-3.5 text-amber-600" />
+                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#fffbe6] text-[#b7791f] border border-[#fbbd08]/40">
+                      <Headphones className="size-3.5 text-[#b7791f]" />
                       <span>В очереди к оператору</span>
                     </div>
                   )
@@ -752,12 +752,12 @@ export const App: React.FC = () => {
 
           {/* Connected Operator Banner inside chat */}
           {activeSession && operatorName && activeSession.status === 'escalated_to_operator' && (
-            <div className="bg-primary-50/70 border-b border-primary-100/80 px-6 py-2 flex items-center justify-between text-xs text-primary-900">
+            <div className="bg-[#eaf6ff] border-b border-[#b9dbf7] px-5 py-2 flex items-center justify-between text-xs text-[#1a1a1a]">
               <div className="flex items-center gap-2">
-                <UserCheck className="size-4 text-primary-600" />
-                <span>К вашему диалогу подключен специалист службы поддержки: <strong>{operatorName}</strong></span>
+                <UserCheck className="size-4 text-[#264b82]" />
+                <span>К вашему диалогу подключен специалист службы поддержки: <strong className="text-[#264b82]">{operatorName}</strong></span>
               </div>
-              <span className="text-[11px] text-primary-600/80 font-medium">Регламентная линия L1</span>
+              <span className="text-[11px] text-[#264b82] font-bold">Линия L1</span>
             </div>
           )}
 
@@ -774,10 +774,10 @@ export const App: React.FC = () => {
               }}
             />
           ) : (
-            <div className="flex-1 flex flex-col h-full overflow-hidden">
+            <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#f7f8f9]">
               {/* Messages Scroll Area */}
-              <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 custom-scrollbar space-y-2">
-                <div className="w-full max-w-4xl mx-auto space-y-2 min-w-0">
+              <div className="flex-1 overflow-y-auto px-4 md:px-8 py-5 custom-scrollbar space-y-3">
+                <div className="w-full max-w-4xl mx-auto space-y-3 min-w-0">
                   {activeSession.messages.map((message) => (
                     <ChatMessage
                       key={message.id}
@@ -794,7 +794,7 @@ export const App: React.FC = () => {
               </div>
 
               {/* Sticky Bottom Composer */}
-              <div className="p-4 border-t border-gray-100/80 bg-white/90 backdrop-blur-xs">
+              <div className="p-3 border-t border-[#e5e5e5] bg-white">
                 <ChatComposer
                   variant="bottom"
                   inputValue={inputValue}

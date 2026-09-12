@@ -3,16 +3,23 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    font-size: 14px;
+  }
+
   :root {
-    --color-primary-500: #3758f9;
-    --color-primary-400: #5e84fc;
-    --color-primary-300: #91aeff;
-    --color-primary-50: #eff3ff;
+    --color-primary: #db2b21;
+    --color-primary-hover: #cd1f15;
+    --color-blue: #264b82;
+    --color-canvas: #f7f8f9;
+    --color-surface: #ffffff;
+    --color-ink: #1a1a1a;
   }
 
   body {
-    background-color: #f9fafb;
-    color: #374151;
+    background-color: #f7f8f9;
+    color: #1a1a1a;
+    font-family: 'Open Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
     overflow: hidden;
   }
 }
@@ -24,16 +31,16 @@
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 5px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
+  background: rgba(128, 135, 139, 0.8);
 }
 
 .no-scrollbar::-webkit-scrollbar {

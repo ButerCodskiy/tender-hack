@@ -85,19 +85,19 @@ export const OperatorChatArea: React.FC<OperatorChatAreaProps> = ({
       case 'P0':
         return {
           label: 'P0 Критический',
-          badge: 'bg-red-50 text-red-600 border-red-200 font-bold',
+          badge: 'bg-[#fef0ef] text-[#db2b21] border-[#db2b21]/40 font-bold',
           icon: ShieldAlert,
         };
       case 'P1':
         return {
           label: 'P1 Срочный',
-          badge: 'bg-amber-50 text-amber-700 border-amber-200 font-semibold',
+          badge: 'bg-[#fff3ec] text-[#f67319] border-[#f67319]/40 font-bold',
           icon: AlertTriangle,
         };
       case 'P2':
         return {
           label: 'P2 Стандарт',
-          badge: 'bg-primary-50 text-primary-600 border-primary-200 font-medium',
+          badge: 'bg-[#eaf6ff] text-[#264b82] border-[#264b82]/30 font-bold',
           icon: Clock,
         };
     }
@@ -107,30 +107,30 @@ export const OperatorChatArea: React.FC<OperatorChatAreaProps> = ({
   const PrioIcon = prio.icon;
 
   return (
-    <div className="flex-1 flex flex-col h-dvh bg-gray-50/40 overflow-hidden">
+    <div className="flex-1 flex flex-col h-dvh bg-[#f7f8f9] overflow-hidden">
       {/* Ticket Header */}
-      <div className="h-16 px-6 border-b border-gray-100 bg-white flex items-center justify-between shrink-0 shadow-2xs z-10">
+      <div className="h-14 px-5 border-b border-[#e5e5e5] bg-white flex items-center justify-between shrink-0 z-10">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="size-10 rounded-xl bg-gray-100 border border-gray-200/80 flex items-center justify-center text-gray-600 shrink-0">
-            <Building2 className="size-5" />
+          <div className="size-8 rounded-none bg-[#f7f8f9] border border-[#dddddd] flex items-center justify-center text-[#264b82] shrink-0">
+            <Building2 className="size-4" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-bold text-title-50 truncate">
+              <span className="text-xs font-bold text-[#1a1a1a] truncate">
                 {workspace.client.company_name || 'Поставщик без названия'}
               </span>
               <span className={`text-[10px] px-2 py-0.5 rounded-full border flex items-center gap-1 shrink-0 ${prio.badge}`}>
                 <PrioIcon className="size-3" />
                 <span>{prio.label}</span>
               </span>
-              <span className="text-xs font-mono text-gray-400 shrink-0">
+              <span className="text-xs font-mono text-[#7f8792] shrink-0">
                 #{workspace.ticket_id}
               </span>
             </div>
-            <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+            <div className="flex items-center gap-2 text-[11px] text-[#7f8792] mt-0.5">
               <span>{workspace.client.full_name || 'Представитель'}</span>
               <span>•</span>
-              <span className="font-mono text-[11px] text-gray-400">ИНН {workspace.client.inn || '—'}</span>
+              <span className="font-mono text-[11px]">ИНН {workspace.client.inn || '—'}</span>
             </div>
           </div>
         </div>
@@ -140,17 +140,17 @@ export const OperatorChatArea: React.FC<OperatorChatAreaProps> = ({
           <button
             type="button"
             onClick={onTransferClick}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition cursor-pointer shadow-2xs"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-none text-xs font-bold text-[#264b82] bg-white border border-[#264b82] hover:bg-[#eaf6ff] transition cursor-pointer"
             title="Передать тикет на другую линию или специалисту"
           >
-            <ArrowRightLeft className="size-3.5 text-gray-500" />
+            <ArrowRightLeft className="size-3.5 text-[#264b82]" />
             <span>Перевести</span>
           </button>
 
           <button
             type="button"
             onClick={onResolveClick}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition cursor-pointer shadow-2xs active:scale-95"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-none text-xs font-bold text-white bg-[#0d9b68] hover:bg-[#05895a] transition cursor-pointer"
             title="Завершить обработку обращения"
           >
             <CheckCircle2 className="size-3.5" />
@@ -160,7 +160,7 @@ export const OperatorChatArea: React.FC<OperatorChatAreaProps> = ({
       </div>
 
       {/* Message Feed */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto p-5 space-y-3 custom-scrollbar">
         {workspace.messages.map((msg) => {
           const isSystem = msg.type === 'system' || msg.sender_type === 'system';
           const isClient = msg.sender_type === 'client' || msg.type === 'user';
@@ -170,10 +170,10 @@ export const OperatorChatArea: React.FC<OperatorChatAreaProps> = ({
           if (isSystem) {
             return (
               <div key={msg.id} className="flex justify-center my-2">
-                <div className="px-3.5 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-[11px] text-amber-800 flex items-center gap-1.5 shadow-2xs">
-                  <AlertTriangle className="size-3 text-amber-600" />
+                <div className="px-3.5 py-1.5 rounded-none bg-[#fffbe6] border border-[#fbbd08]/50 text-[11px] text-[#1a1a1a] flex items-center gap-1.5">
+                  <AlertTriangle className="size-3 text-[#f67319]" />
                   <span>{msg.content}</span>
-                  <span className="text-amber-500 font-mono text-[10px] ml-1">({msg.timestamp})</span>
+                  <span className="text-[#7f8792] font-mono text-[10px] ml-1">({msg.timestamp})</span>
                 </div>
               </div>
             );
@@ -183,17 +183,17 @@ export const OperatorChatArea: React.FC<OperatorChatAreaProps> = ({
           if (isClient) {
             return (
               <div key={msg.id} className="flex items-start gap-2.5 max-w-2xl">
-                <div className="size-8 rounded-full bg-primary-50 border border-primary-200 flex items-center justify-center text-primary-700 shrink-0 font-bold text-xs mt-0.5">
-                  <User className="size-4" />
+                <div className="size-7 rounded-full bg-[#eaf6ff] border border-[#b9dbf7] flex items-center justify-center text-[#264b82] shrink-0 font-bold text-xs mt-0.5">
+                  <User className="size-3.5" />
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-gray-800">
+                    <span className="text-xs font-bold text-[#1a1a1a]">
                       {workspace.client.full_name || 'Клиент'}
                     </span>
-                    <span className="text-[10px] text-gray-400 font-mono">{msg.timestamp}</span>
+                    <span className="text-[10px] text-[#7f8792] font-mono">{msg.timestamp}</span>
                   </div>
-                  <div className="p-3.5 rounded-2xl rounded-tl-sm bg-white border border-gray-200 text-xs md:text-sm text-gray-800 shadow-2xs leading-relaxed break-words [overflow-wrap:anywhere]">
+                  <div className="p-3.5 rounded-none bg-[#eaf6ff] border border-[#b9dbf7] text-xs md:text-[13px] text-[#1a1a1a] leading-relaxed break-words [overflow-wrap:anywhere]">
                     {msg.content}
                   </div>
                 </div>
@@ -205,17 +205,17 @@ export const OperatorChatArea: React.FC<OperatorChatAreaProps> = ({
           if (isBot) {
             return (
               <div key={msg.id} className="flex items-start gap-2.5 max-w-2xl">
-                <div className="size-8 rounded-full bg-gradient-to-tr from-primary-600 to-primary-400 flex items-center justify-center text-white shrink-0 shadow-2xs mt-0.5">
-                  <Sparkles className="size-4" />
+                <div className="size-7 rounded-none bg-[#264b82] flex items-center justify-center text-white shrink-0 mt-0.5">
+                  <Sparkles className="size-3.5" />
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-primary-700">
+                    <span className="text-xs font-bold text-[#264b82]">
                       ИИ-Ассистент (автоответ)
                     </span>
-                    <span className="text-[10px] text-gray-400 font-mono">{msg.timestamp}</span>
+                    <span className="text-[10px] text-[#7f8792] font-mono">{msg.timestamp}</span>
                   </div>
-                  <div className="p-3.5 rounded-2xl rounded-tl-sm bg-primary-50/40 border border-primary-100 text-xs md:text-sm text-gray-800 shadow-2xs leading-relaxed break-words [overflow-wrap:anywhere]">
+                  <div className="p-3.5 rounded-none bg-white border border-[#e5e5e5] text-xs md:text-[13px] text-[#1a1a1a] leading-relaxed break-words [overflow-wrap:anywhere]">
                     {msg.content}
                   </div>
                 </div>
@@ -227,17 +227,17 @@ export const OperatorChatArea: React.FC<OperatorChatAreaProps> = ({
           return (
             <div key={msg.id} className="flex justify-end">
               <div className="flex items-start gap-2.5 max-w-2xl flex-row-reverse">
-                <div className="size-8 rounded-full bg-primary-600 flex items-center justify-center text-white shrink-0 font-bold text-xs mt-0.5 shadow-2xs">
-                  <Headphones className="size-4" />
+                <div className="size-7 rounded-full bg-[#264b82] flex items-center justify-center text-white shrink-0 font-bold text-xs mt-0.5">
+                  <Headphones className="size-3.5" />
                 </div>
                 <div className="space-y-1 text-right">
                   <div className="flex items-center justify-end gap-2">
-                    <span className="text-[10px] text-gray-400 font-mono">{msg.timestamp}</span>
-                    <span className="text-xs font-semibold text-gray-800">
+                    <span className="text-[10px] text-[#7f8792] font-mono">{msg.timestamp}</span>
+                    <span className="text-xs font-bold text-[#1a1a1a]">
                       Вы (Оператор)
                     </span>
                   </div>
-                  <div className="p-3.5 rounded-2xl rounded-tr-sm bg-primary-600 text-white text-xs md:text-sm shadow-2xs leading-relaxed text-left break-words [overflow-wrap:anywhere]">
+                  <div className="p-3.5 rounded-none bg-[#264b82] text-white text-xs md:text-[13px] leading-relaxed text-left break-words [overflow-wrap:anywhere]">
                     {msg.content}
                   </div>
                 </div>
@@ -249,18 +249,18 @@ export const OperatorChatArea: React.FC<OperatorChatAreaProps> = ({
       </div>
 
       {/* Response Composer */}
-      <div className="p-4 border-t border-gray-100 bg-white shrink-0">
-        <div className="relative rounded-2xl border border-gray-200 bg-white focus-within:border-primary-500 focus-within:ring-2 focus-within:ring-primary-100 transition shadow-2xs">
+      <div className="p-3 border-t border-[#e5e5e5] bg-white shrink-0">
+        <div className="relative rounded-none border border-[#d4d4d5] bg-white focus-within:border-[#264b82] transition">
           <textarea
             value={draftText}
             onChange={(e) => onDraftChange(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Введите ответ клиенту..."
             rows={3}
-            className="w-full p-3.5 pb-12 bg-transparent text-xs md:text-sm text-gray-800 placeholder-gray-400 outline-none resize-none leading-relaxed"
+            className="w-full p-3 pb-10 bg-transparent text-xs md:text-[13px] text-[#1a1a1a] placeholder-[#7f8792] outline-none resize-none leading-relaxed"
           />
 
-          <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between">
+          <div className="absolute bottom-2 left-3 right-3 flex items-center justify-between">
             <button
               type="button"
               disabled={!draftText.trim() || isSending}
@@ -269,10 +269,10 @@ export const OperatorChatArea: React.FC<OperatorChatAreaProps> = ({
                   onSendMessage();
                 }
               }}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer shadow-xs active:scale-95"
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-none text-xs font-bold bg-[#db2b21] text-white hover:bg-[#cd1f15] active:bg-[#af221a] disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
             >
               <span>{isSending ? 'Отправка...' : 'Отправить ответ'}</span>
-              <Send className="size-3.5" />
+              <Send className="size-3" />
             </button>
           </div>
         </div>

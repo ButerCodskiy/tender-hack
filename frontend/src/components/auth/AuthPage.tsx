@@ -144,15 +144,15 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onCancel }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#f9fafb] p-4 overflow-y-auto custom-scrollbar">
-      <div className="relative w-full max-w-lg bg-white rounded-3xl border border-gray-100 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.08)] p-6 sm:p-8 my-8 animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#f7f8f9] p-4 overflow-y-auto custom-scrollbar">
+      <div className="relative w-full max-w-lg bg-white rounded-none border border-[#22242626] shadow-md p-6 sm:p-8 my-8">
         {/* Close / Back button */}
         {onCancel && (
           <button
             type="button"
             onClick={onCancel}
             title="Вернуться к чату"
-            className="absolute top-5 right-5 p-2 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition cursor-pointer"
+            className="absolute top-4 right-4 p-1.5 text-[#7f8792] hover:text-[#1a1a1a] hover:bg-[#f2f7fc] transition cursor-pointer"
           >
             <X className="size-5" />
           </button>
@@ -160,39 +160,39 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onCancel }) => {
 
         {/* Logo & Header */}
         <div className="flex flex-col items-center text-center mb-6">
-          <div className="size-12 rounded-2xl bg-gradient-to-tr from-primary-600 to-primary-400 flex items-center justify-center text-white shadow-md shadow-primary-500/20 mb-3">
+          <div className="size-12 rounded-none bg-[#db2b21] flex items-center justify-center text-white mb-3">
             <Sparkles className="size-6" />
           </div>
-          <h1 className="text-xl sm:text-2xl font-semibold text-title-50 tracking-tight">
+          <h1 className="text-xl sm:text-2xl font-bold text-[#1a1a1a] tracking-tight">
             Портал Поставщиков
           </h1>
-          <p className="text-xs sm:text-sm text-text-100 mt-1">
-            Единая система интеллектуальной поддержки
+          <p className="text-xs sm:text-sm text-[#7f8792] mt-1 font-semibold">
+            Единая служба поддержки пользователей ЕАИСТ
           </p>
         </div>
 
         {/* Mode Switcher Banner */}
         <div
-          className={`mb-5 p-3 rounded-2xl border text-xs flex items-center justify-between gap-3 ${
+          className={`mb-5 p-2.5 rounded-none border text-xs flex items-center justify-between gap-3 ${
             standalone
-              ? 'bg-blue-50/80 border-blue-200 text-blue-900'
-              : 'bg-emerald-50/80 border-emerald-200 text-emerald-900'
+              ? 'bg-[#eaf6ff] border-[#264b82]/30 text-[#264b82]'
+              : 'bg-[#e7f8f2] border-[#0d9b68]/30 text-[#0d9b68]'
           }`}
         >
           <div className="flex items-center gap-2 min-w-0">
             <span
-              className={`size-2.5 rounded-full shrink-0 ${
-                standalone ? 'bg-blue-500' : 'bg-emerald-500'
+              className={`size-2 rounded-full shrink-0 ${
+                standalone ? 'bg-[#264b82]' : 'bg-[#0d9b68]'
               }`}
             />
             <div className="truncate">
-              <span className="font-semibold block truncate">
-                {standalone ? 'Автономный режим (Чисто визуал)' : 'Режим связи с бэкендом (API)'}
+              <span className="font-bold block truncate text-[#1a1a1a]">
+                {standalone ? 'Автономный режим (Демо)' : 'Режим связи с бэкендом (API)'}
               </span>
-              <span className="text-[11px] opacity-80 block truncate">
+              <span className="text-[11px] text-[#7f8792] block truncate">
                 {standalone
-                  ? 'Работает без API и БД. Доступен быстрый демо-вход.'
-                  : 'Запросы направляются к реальному FastAPI и БД.'}
+                  ? 'Автономная работа без обязательной БД'
+                  : 'Запросы направляются к API серверу'}
               </span>
             </div>
           </div>
@@ -200,10 +200,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onCancel }) => {
             type="button"
             onClick={() => setStandaloneMode(!standalone)}
             title={standalone ? 'Переключить на бэкенд' : 'Переключить в автономный режим'}
-            className={`text-xs font-semibold px-2.5 py-1 rounded-xl transition cursor-pointer shrink-0 ${
+            className={`text-xs font-bold px-2.5 py-1 rounded-none transition cursor-pointer shrink-0 ${
               standalone
-                ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-2xs'
-                : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs'
+                ? 'bg-[#264b82] hover:bg-[#1c3f72] text-white'
+                : 'bg-[#0d9b68] hover:bg-[#05895a] text-white'
             }`}
           >
             {standalone ? 'К API' : 'В Демо'}
@@ -211,17 +211,17 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onCancel }) => {
         </div>
 
         {/* Tabs: Вход / Регистрация */}
-        <div className="flex p-1 bg-background-soft-100 rounded-2xl mb-6">
+        <div className="flex p-0.5 bg-[#eeeeee] rounded-none border border-[#dddddd] mb-5">
           <button
             type="button"
             onClick={() => {
               setTab('login');
               setErrorMessage(null);
             }}
-            className={`flex-1 py-2 text-xs sm:text-sm font-semibold rounded-xl transition cursor-pointer ${
+            className={`flex-1 py-2 text-xs sm:text-sm font-bold rounded-none transition cursor-pointer ${
               tab === 'login'
-                ? 'bg-white text-title-50 shadow-2xs'
-                : 'text-text-100 hover:text-title-50'
+                ? 'bg-white text-[#1a1a1a] shadow-none border border-[#d4d4d5]'
+                : 'text-[#7f8792] hover:text-[#1a1a1a]'
             }`}
           >
             Вход в систему
@@ -232,10 +232,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onCancel }) => {
               setTab('register');
               setErrorMessage(null);
             }}
-            className={`flex-1 py-2 text-xs sm:text-sm font-semibold rounded-xl transition cursor-pointer ${
+            className={`flex-1 py-2 text-xs sm:text-sm font-bold rounded-none transition cursor-pointer ${
               tab === 'register'
-                ? 'bg-white text-title-50 shadow-2xs'
-                : 'text-text-100 hover:text-title-50'
+                ? 'bg-white text-[#1a1a1a] shadow-none border border-[#d4d4d5]'
+                : 'text-[#7f8792] hover:text-[#1a1a1a]'
             }`}
           >
             Регистрация поставщика
@@ -244,7 +244,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onCancel }) => {
 
         {/* Error message */}
         {errorMessage && (
-          <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200/80 text-xs text-red-700 leading-relaxed animate-in fade-in duration-150">
+          <div className="mb-4 p-3 rounded-none bg-[#fef0ef] border border-[#db2b21]/40 text-xs text-[#db2b21] leading-relaxed">
             {errorMessage}
           </div>
         )}
@@ -253,25 +253,25 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onCancel }) => {
         {tab === 'login' ? (
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+              <label className="block text-xs font-bold text-[#1a1a1a] mb-1">
                 Электронная почта
               </label>
               <div className="relative">
-                <Mail className="size-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Mail className="size-4 text-[#7f8792] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="supplier@example.com"
-                  className="w-full text-xs sm:text-sm pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-primary-500 transition"
+                  className="w-full text-xs sm:text-sm pl-9 pr-3 py-2 rounded-none border border-[#d4d4d5] focus:outline-none focus:border-[#264b82] transition"
                 />
               </div>
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-semibold text-gray-700">
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-bold text-[#1a1a1a]">
                   Пароль
                 </label>
                 <a
@@ -280,25 +280,25 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onCancel }) => {
                     e.preventDefault();
                     alert('Для восстановления доступа обратитесь в службу поддержки через чат.');
                   }}
-                  className="text-[11px] text-primary-500 hover:underline"
+                  className="text-[11px] text-[#264b82] font-semibold hover:underline"
                 >
                   Забыли пароль?
                 </a>
               </div>
               <div className="relative">
-                <Lock className="size-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Lock className="size-4 text-[#7f8792] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full text-xs sm:text-sm pl-10 pr-10 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-primary-500 transition"
+                  className="w-full text-xs sm:text-sm pl-9 pr-9 py-2 rounded-none border border-[#d4d4d5] focus:outline-none focus:border-[#264b82] transition"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7f8792] hover:text-[#1a1a1a] cursor-pointer"
                 >
                   {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                 </button>
@@ -308,7 +308,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onCancel }) => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-2.5 px-4 rounded-xl bg-primary-500 hover:bg-primary-600 text-white font-semibold text-xs sm:text-sm shadow-sm shadow-primary-500/20 transition flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+              className="w-full py-2.5 px-4 rounded-none bg-[#db2b21] hover:bg-[#cd1f15] active:bg-[#af221a] text-white font-bold text-xs sm:text-sm transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed mt-2"
             >
               <span>{isSubmitting ? 'Вход...' : 'Войти в личный кабинет'}</span>
               <ArrowRight className="size-4" />
@@ -316,42 +316,42 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onCancel }) => {
           </form>
         ) : (
           /* Register Form */
-          <form onSubmit={handleRegister} className="space-y-3.5">
+          <form onSubmit={handleRegister} className="space-y-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
+              <label className="block text-xs font-bold text-[#1a1a1a] mb-1">
                 Электронная почта *
               </label>
               <div className="relative">
-                <Mail className="size-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Mail className="size-4 text-[#7f8792] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="company@example.com"
-                  className="w-full text-xs sm:text-sm pl-10 pr-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-primary-500 transition"
+                  className="w-full text-xs sm:text-sm pl-9 pr-3 py-2 rounded-none border border-[#d4d4d5] focus:outline-none focus:border-[#264b82] transition"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
+              <label className="block text-xs font-bold text-[#1a1a1a] mb-1">
                 Пароль *
               </label>
               <div className="relative">
-                <Lock className="size-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Lock className="size-4 text-[#7f8792] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Минимум 8 символов"
-                  className="w-full text-xs sm:text-sm pl-10 pr-10 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-primary-500 transition"
+                  className="w-full text-xs sm:text-sm pl-9 pr-9 py-2 rounded-none border border-[#d4d4d5] focus:outline-none focus:border-[#264b82] transition"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7f8792] hover:text-[#1a1a1a] cursor-pointer"
                 >
                   {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                 </button>
@@ -360,51 +360,51 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onCancel }) => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                <label className="block text-xs font-bold text-[#1a1a1a] mb-1">
                   ФИО представителя
                 </label>
                 <div className="relative">
-                  <User className="size-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <User className="size-4 text-[#7f8792] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
                     type="text"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     placeholder="Иванов И. И."
-                    className="w-full text-xs pl-9 pr-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-primary-500 transition"
+                    className="w-full text-xs pl-9 pr-3 py-2 rounded-none border border-[#d4d4d5] focus:outline-none focus:border-[#264b82] transition"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                <label className="block text-xs font-bold text-[#1a1a1a] mb-1">
                   ИНН организации
                 </label>
                 <div className="relative">
-                  <FileText className="size-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <FileText className="size-4 text-[#7f8792] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
                     type="text"
                     value={inn}
                     maxLength={12}
                     onChange={(e) => setInn(e.target.value)}
                     placeholder="7701234567"
-                    className="w-full text-xs pl-9 pr-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-primary-500 transition"
+                    className="w-full text-xs pl-9 pr-3 py-2 rounded-none border border-[#d4d4d5] focus:outline-none focus:border-[#264b82] font-mono transition"
                   />
                 </div>
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
+              <label className="block text-xs font-bold text-[#1a1a1a] mb-1">
                 Наименование организации / ИП
               </label>
               <div className="relative">
-                <Building2 className="size-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Building2 className="size-4 text-[#7f8792] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
                   placeholder="ООО «Поставка» или ИП Петров"
-                  className="w-full text-xs sm:text-sm pl-10 pr-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-primary-500 transition"
+                  className="w-full text-xs sm:text-sm pl-9 pr-3 py-2 rounded-none border border-[#d4d4d5] focus:outline-none focus:border-[#264b82] transition"
                 />
               </div>
             </div>
@@ -412,7 +412,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onCancel }) => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-2.5 px-4 rounded-xl bg-primary-500 hover:bg-primary-600 text-white font-semibold text-xs sm:text-sm shadow-sm shadow-primary-500/20 transition flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed mt-3"
+              className="w-full py-2.5 px-4 rounded-none bg-[#db2b21] hover:bg-[#cd1f15] active:bg-[#af221a] text-white font-bold text-xs sm:text-sm transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed mt-2"
             >
               <span>{isSubmitting ? 'Регистрация...' : 'Зарегистрироваться'}</span>
               <ArrowRight className="size-4" />
@@ -420,10 +420,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onCancel }) => {
           </form>
         )}
 
-        {/* Quick Demo Login Section (для демонстрации жюри) */}
-        <div className="mt-6 pt-5 border-t border-gray-100">
-          <div className="flex items-center justify-between mb-2.5">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+        {/* Quick Demo Login Section */}
+        <div className="mt-5 pt-4 border-t border-[#e5e5e5]">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[#7f8792]">
               Быстрый вход для тестирования ролей:
             </span>
           </div>
@@ -435,16 +435,16 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onCancel }) => {
                 type="button"
                 disabled={isSubmitting}
                 onClick={() => handleQuickDemoLogin(demo)}
-                className="flex items-center gap-2 p-2.5 rounded-xl border border-gray-200/80 hover:border-primary-300 hover:bg-primary-50/50 text-left transition cursor-pointer group active:scale-95"
+                className="flex items-center gap-2 p-2 rounded-none border border-[#22242626] hover:border-[#264b82] hover:bg-[#f2f7fc] text-left transition cursor-pointer group"
               >
-                <div className="size-7 rounded-lg bg-gray-50 group-hover:bg-white flex items-center justify-center shrink-0 shadow-2xs">
+                <div className="size-7 rounded-none bg-[#f7f8f9] flex items-center justify-center shrink-0 border border-[#e5e5e5]">
                   {getRoleIcon(demo.role)}
                 </div>
                 <div className="truncate">
-                  <span className="text-xs font-semibold text-gray-800 block truncate group-hover:text-primary-600">
+                  <span className="text-xs font-bold text-[#1a1a1a] block truncate group-hover:text-[#264b82]">
                     {demo.title}
                   </span>
-                  <span className="text-[10px] text-gray-400 block truncate font-mono">
+                  <span className="text-[10px] text-[#7f8792] block truncate font-mono">
                     {demo.role}
                   </span>
                 </div>
@@ -454,9 +454,9 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onCancel }) => {
         </div>
 
         {/* Security Badge Footer */}
-        <div className="mt-5 text-center flex items-center justify-center gap-1.5 text-[11px] text-gray-400">
-          <ShieldCheck className="size-3.5 text-emerald-500" />
-          <span>Безопасная аутентификация по стандарту ЕСИА / ГОСТ</span>
+        <div className="mt-4 text-center flex items-center justify-center gap-1.5 text-[11px] text-[#7f8792]">
+          <ShieldCheck className="size-3.5 text-[#0d9b68]" />
+          <span>Аутентификация по стандартам Правительства Москвы</span>
         </div>
       </div>
     </div>
