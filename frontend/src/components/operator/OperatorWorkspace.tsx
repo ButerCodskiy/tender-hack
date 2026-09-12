@@ -242,7 +242,7 @@ export const OperatorWorkspace: React.FC<OperatorWorkspaceProps> = ({
   };
 
   return (
-    <div className="flex h-dvh w-full overflow-hidden bg-white">
+    <div className="flex h-full w-full overflow-hidden bg-white">
       {/* Column 1: Operator Sidebar (Tickets queue & Shift status) */}
       <OperatorSidebar
         profile={profile}

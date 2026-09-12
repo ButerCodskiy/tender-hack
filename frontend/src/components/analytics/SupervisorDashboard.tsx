@@ -16,6 +16,9 @@ import {
   ChevronRight,
   FileSpreadsheet,
   Check,
+  LogOut,
+  X,
+  Copy,
 } from 'lucide-react';
 import {
   AnalyticsDashboardMetrics,
@@ -27,10 +30,18 @@ import {
   fetchSystemIncidents,
   fetchOperatorMetrics,
   downloadAnalyticsCsv,
+  getMockDeflectionTrend,
+  getMockCategoryBreakdown,
+  getMockSlaTimeline,
+  getMockCsatDistribution,
 } from '../../services/analyticsApi';
+import { DeflectionChart } from './DeflectionChart';
+import { SlaPerformanceChart } from './SlaPerformanceChart';
+import { CsatComparisonChart } from './CsatComparisonChart';
 
 interface SupervisorDashboardProps {
   onBackToOperator?: () => void;
+  onLogout?: () => void;
 }
 
 type TabType = 'overview' | 'incidents' | 'operators' | 'ab_experiment';
@@ -38,7 +49,16 @@ type PeriodType = 'today' | '7d' | '30d';
 
 export const SupervisorDashboard: React.FC<SupervisorDashboardProps> = ({
   onBackToOperator,
+  onLogout,
 }) => {
+  const [selectedIncident, setSelectedIncident] = useState<SystemIncident | null>(null);
+  const [copiedCode, setCopiedCode] = useState(false);
+
+  const handleCopyErrorCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 2000);
+  };
   const [metrics, setMetrics] = useState<AnalyticsDashboardMetrics | null>(null);
   const [incidents, setIncidents] = useState<SystemIncident[]>([]);
   const [operators, setOperators] = useState<OperatorDailyMetric[]>([]);
@@ -301,6 +321,19 @@ export const SupervisorDashboard: React.FC<SupervisorDashboardProps> = ({
               >
                 <Users className="size-3.5 text-slate-500" />
                 <span>АРМ Оператора</span>
+              </button>
+            )}
+
+            {/* Logout Button */}
+            {onLogout && (
+              <button
+                type="button"
+                onClick={onLogout}
+                className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-300 bg-white hover:bg-slate-50 text-xs font-bold text-slate-700 transition cursor-pointer"
+                title="Выйти из системы"
+              >
+                <LogOut className="size-3.5 text-slate-500" />
+                <span>Выйти</span>
               </button>
             )}
 
@@ -638,6 +671,32 @@ export const SupervisorDashboard: React.FC<SupervisorDashboardProps> = ({
               </div>
             </div>
 
+            {/* SVG CHARTS SUITE */}
+            <div className="space-y-4">
+              {/* Chart 1: Deflection Rate */}
+              <DeflectionChart
+                trendData={getMockDeflectionTrend()}
+                categories={getMockCategoryBreakdown()}
+                currentRate={metrics?.bot_resolved_percent || 68.0}
+                botTickets={metrics?.bot_resolved_tickets || 106}
+                totalTickets={metrics?.total_tickets || 156}
+              />
+
+              {/* Chart 2: SLA & Speed Performance */}
+              <SlaPerformanceChart
+                timelineData={getMockSlaTimeline()}
+                avgFrtSec={metrics?.avg_first_response_time_sec || 18.0}
+                avgAhtSec={metrics?.avg_handling_time_sec || 150.0}
+              />
+
+              {/* Chart 3: Fair CSAT arbitration comparison */}
+              <CsatComparisonChart
+                distribution={getMockCsatDistribution()}
+                rawCsat={metrics?.client_csat || 3.42}
+                adjustedCsat={metrics?.adjusted_csat || 4.78}
+              />
+            </div>
+
             {/* Quick overview table of top operators */}
             <div className="bg-white border border-slate-200 shadow-xs">
               <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
@@ -779,28 +838,43 @@ export const SupervisorDashboard: React.FC<SupervisorDashboardProps> = ({
                   <tr>
                     <th className="py-2.5 px-4">Тип сбоя</th>
                     <th className="py-2.5 px-4">ID обращения</th>
+                    <th className="py-2.5 px-4">Код ошибки</th>
                     <th className="py-2.5 px-4">Симптомы и описание сбоя</th>
                     <th className="py-2.5 px-4 text-center">Статус</th>
+                    <th className="py-2.5 px-4 text-center">Арбитраж LLM</th>
                     <th className="py-2.5 px-4 text-right">Время фиксации</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 text-slate-700">
                   {filteredIncidents.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="py-8 text-center text-slate-400">
+                      <td colSpan={7} className="py-8 text-center text-slate-400">
                         По выбранному фильтру инцидентов не обнаружено
                       </td>
                     </tr>
                   ) : (
                     filteredIncidents.map((inc) => (
-                      <tr key={inc.id} className="hover:bg-slate-50 transition">
+                      <tr
+                        key={inc.id}
+                        onClick={() => setSelectedIncident(inc)}
+                        className="hover:bg-slate-50 transition cursor-pointer"
+                      >
                         <td className="py-3 px-4 whitespace-nowrap">
                           {getIncidentTypeBadge(inc.incident_type)}
                         </td>
-                        <td className="py-3 px-4 font-mono text-[11px] text-slate-500 font-semibold">
+                        <td className="py-3 px-4 font-mono text-[11px] text-[#004B87] font-bold">
                           #{inc.ticket_id}
                         </td>
-                        <td className="py-3 px-4 text-slate-900 max-w-lg font-medium leading-relaxed">
+                        <td className="py-3 px-4 font-mono text-[11px]">
+                          {inc.error_code ? (
+                            <span className="bg-rose-100 text-rose-800 px-1.5 py-0.5 border border-rose-200 font-bold">
+                              {inc.error_code}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-slate-900 max-w-lg font-medium leading-relaxed truncate">
                           {inc.description}
                         </td>
                         <td className="py-3 px-4 text-center whitespace-nowrap">
@@ -814,6 +888,12 @@ export const SupervisorDashboard: React.FC<SupervisorDashboardProps> = ({
                               РЕШЕН
                             </span>
                           )}
+                        </td>
+                        <td className="py-3 px-4 text-center whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <Sparkles className="size-3 text-emerald-600" />
+                            Системный сбой
+                          </span>
                         </td>
                         <td className="py-3 px-4 text-right text-slate-500 font-mono text-[11px] whitespace-nowrap">
                           {new Date(inc.created_at).toLocaleTimeString('ru-RU', {
@@ -1116,6 +1196,119 @@ export const SupervisorDashboard: React.FC<SupervisorDashboardProps> = ({
           </section>
         )}
       </main>
+      {/* DETAILED INCIDENT AUDIT MODAL */}
+      {selectedIncident && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in">
+          <div className="bg-white max-w-2xl w-full border-2 border-[#004B87] shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="bg-[#004B87] text-white px-5 py-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="size-5 text-white" />
+                <h3 className="font-bold text-sm">
+                  Аудит инцидента #{selectedIncident.id} (Тикет #{selectedIncident.ticket_id})
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedIncident(null)}
+                className="text-white/80 hover:text-white transition cursor-pointer p-1"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar text-xs">
+              {/* Incident Type & Status */}
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                <div className="flex items-center gap-2">
+                  {getIncidentTypeBadge(selectedIncident.incident_type)}
+                  {selectedIncident.error_code && (
+                    <span className="font-mono bg-rose-100 text-rose-800 px-2 py-0.5 border border-rose-200 font-bold">
+                      Код: {selectedIncident.error_code}
+                    </span>
+                  )}
+                </div>
+                <span className="text-slate-500 font-mono">
+                  Зафиксировано: {new Date(selectedIncident.created_at).toLocaleString('ru-RU')}
+                </span>
+              </div>
+
+              {/* Description */}
+              <div className="space-y-1">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                  Описание симптомов сбоя
+                </span>
+                <p className="text-sm font-semibold text-slate-900 bg-slate-50 p-3 border border-slate-200">
+                  {selectedIncident.description}
+                </p>
+              </div>
+
+              {/* LLM-Judge Verdict Highlight */}
+              <div className="bg-emerald-50 border border-emerald-200 p-4 space-y-2">
+                <div className="flex items-center gap-1.5 text-emerald-800 font-bold">
+                  <Sparkles className="size-4 text-emerald-600" />
+                  <span>Вердикт нейросети-аудитора (LLM-Judge):</span>
+                </div>
+                <p className="text-xs text-emerald-800 leading-relaxed">
+                  {selectedIncident.llm_verdict ||
+                    'Классифицировано как root_cause=system_issue. Оценка 1 звезда исключена из расчета рейтинга оператора в соответствии с регламентом ADR-0006.'}
+                </p>
+                <div className="flex items-center gap-3 pt-2 border-t border-emerald-200 text-[11px]">
+                  <span className="text-slate-500">
+                    Оценка поставщика: <strong className="text-rose-600 line-through">{selectedIncident.raw_score || 1} ★</strong>
+                  </span>
+                  <span className="text-emerald-700">
+                    Зачтено в рейтинг оператора: <strong className="font-bold">5.00 ★</strong>
+                  </span>
+                </div>
+              </div>
+
+              {/* Dialog Excerpt */}
+              {selectedIncident.dialog_excerpt && (
+                <div className="space-y-1">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                    Выдержка из диалога поставщика с поддержкой
+                  </span>
+                  <pre className="bg-slate-900 text-slate-50 p-3 rounded-none font-mono text-[11px] whitespace-pre-wrap leading-relaxed border border-slate-700">
+                    {selectedIncident.dialog_excerpt}
+                  </pre>
+                </div>
+              )}
+
+              {/* Operator info */}
+              {selectedIncident.operator_name && (
+                <div className="flex items-center justify-between bg-slate-50 border border-slate-200 p-3">
+                  <span className="text-slate-600">Ответственный специалист:</span>
+                  <strong className="text-slate-900">{selectedIncident.operator_name}</strong>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-slate-50 border-t border-slate-200 px-5 py-3 flex items-center justify-between">
+              {selectedIncident.error_code ? (
+                <button
+                  type="button"
+                  onClick={() => handleCopyErrorCode(selectedIncident.error_code || '')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  <Copy className="size-3.5" />
+                  <span>{copiedCode ? 'Скопировано!' : 'Скопировать код ошибки'}</span>
+                </button>
+              ) : <div />}
+
+              <button
+                type="button"
+                onClick={() => setSelectedIncident(null)}
+                className="px-4 py-1.5 bg-[#004B87] text-white text-xs font-bold hover:bg-[#003B6F] transition cursor-pointer"
+              >
+                Закрыть
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
