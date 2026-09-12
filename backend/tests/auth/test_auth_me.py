@@ -7,42 +7,18 @@ from datetime import timedelta
 import pytest
 from fastapi import status
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import get_db
 from src.auth.models import UserModel
 from src.core.security import create_access_token
-from src.db.database import Base, async_session_maker, engine
 from src.main import app
 
 
-@pytest.fixture(autouse=True)
-async def setup_db() -> AsyncGenerator[None, None]:
-    """Обеспечивает наличие таблиц и очищает данные перед каждым тестом."""
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        await conn.execute(
-            text(
-                "TRUNCATE TABLE chats, client_profiles, users, roles "
-                "RESTART IDENTITY CASCADE;"
-            )
-        )
-    yield
-    async with engine.begin() as conn:
-        await conn.execute(
-            text(
-                "TRUNCATE TABLE chats, client_profiles, users, roles "
-                "RESTART IDENTITY CASCADE;"
-            )
-        )
-
-
 @pytest.fixture
-async def test_session() -> AsyncGenerator[AsyncSession, None]:
-    """Предоставляет тестовую сессию базы данных PostgreSQL."""
-    async with async_session_maker() as session:
-        yield session
+async def test_session(async_session: AsyncSession) -> AsyncSession:
+    """Предоставляет изолированную сессию базы данных PostgreSQL с откатом изменений."""
+    return async_session
 
 
 @pytest.fixture

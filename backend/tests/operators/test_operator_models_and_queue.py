@@ -1,17 +1,14 @@
 """Интеграционные тесты моделей операторов, репозитория и приоритетных очередей Redis."""
 
-from collections.abc import AsyncGenerator
-
 import pytest
 import redis.asyncio as aioredis
 import uuid6
-from sqlalchemy import text
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.models import RoleModel, UserModel
 from src.core.redis_client import RedisLineQueue
-from src.db.database import Base, async_session_maker, engine
 from src.operators.models import (
     OperatorProfileModel,
     OperatorShiftStatus,
@@ -20,32 +17,10 @@ from src.operators.models import (
 from src.operators.repository import OperatorRepository
 
 
-@pytest.fixture(autouse=True)
-async def setup_db() -> AsyncGenerator[None, None]:
-    """Гарантирует актуальную схему таблиц и очищает данные перед каждым тестом."""
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        await conn.execute(
-            text(
-                "TRUNCATE TABLE operator_profiles, support_lines, users, roles "
-                "RESTART IDENTITY CASCADE;"
-            )
-        )
-    yield
-    async with engine.begin() as conn:
-        await conn.execute(
-            text(
-                "TRUNCATE TABLE operator_profiles, support_lines, users, roles "
-                "RESTART IDENTITY CASCADE;"
-            )
-        )
-
-
 @pytest.fixture
-async def session() -> AsyncGenerator[AsyncSession, None]:
-    """Предоставляет изолированную асинхронную сессию базы данных."""
-    async with async_session_maker() as s:
-        yield s
+async def session(async_session: AsyncSession) -> AsyncSession:
+    """Предоставляет изолированную асинхронную сессию базы данных с откатом изменений."""
+    return async_session
 
 
 @pytest.fixture
@@ -53,13 +28,16 @@ async def base_operator_context(
     session: AsyncSession,
 ) -> tuple[UserModel, SupportLineModel]:
     """Создает тестового пользователя с ролью оператора и линию поддержки."""
-    role = RoleModel(id=2, code="operator", name="Оператор поддержки")
-    session.add(role)
-    await session.flush()
+    stmt_role = select(RoleModel).where(RoleModel.code == "operator")
+    role = (await session.scalars(stmt_role)).first()
+    if not role:
+        role = RoleModel(code="operator", name="Оператор поддержки")
+        session.add(role)
+        await session.flush()
 
     user = UserModel(
         id=uuid6.uuid7(),
-        email="operator1@zakupki.mos.ru",
+        email=f"operator_{uuid6.uuid7().hex[:8]}@zakupki.mos.ru",
         password_hash="secure_hash",
         full_name="Иванов Иван Иванович",
         role_id=role.id,
@@ -67,13 +45,14 @@ async def base_operator_context(
     session.add(user)
 
     line = SupportLineModel(
-        code="L1",
-        name="Первая линия поддержки",
+        code=f"LINE_{uuid6.uuid7().hex[:8]}",
+        name="Тестовая линия поддержки",
         description="Типовые вопросы",
     )
     session.add(line)
     await session.flush()
 
+    await session.flush()
     return user, line
 
 
@@ -123,8 +102,8 @@ async def test_operator_profile_crud_and_queries(
         user.id, load_relations=True
     )
     assert profile_with_relations is not None
-    assert profile_with_relations.user.email == "operator1@zakupki.mos.ru"
-    assert profile_with_relations.line.code == "L1"
+    assert profile_with_relations.user.email == user.email
+    assert profile_with_relations.line.code == line.code
 
 
 async def test_operator_profile_constraints(
@@ -133,12 +112,14 @@ async def test_operator_profile_constraints(
 ) -> None:
     """Проверяет соблюдение ограничений целостности статуса смены и лимита слотов."""
     user, line = base_operator_context
+    user_id = user.id
+    line_id = line.id
 
     # 1. Ошибка при недопустимом статусе смены
     with pytest.raises(IntegrityError):
         invalid_status_profile = OperatorProfileModel(
-            user_id=user.id,
-            line_id=line.id,
+            user_id=user_id,
+            line_id=line_id,
             shift_status="invalid_status",
             max_slots=5,
         )
@@ -149,8 +130,8 @@ async def test_operator_profile_constraints(
     # 2. Ошибка при недопустимом числе слотов (max_slots <= 0)
     with pytest.raises(IntegrityError):
         invalid_slots_profile = OperatorProfileModel(
-            user_id=user.id,
-            line_id=line.id,
+            user_id=user_id,
+            line_id=line_id,
             shift_status=OperatorShiftStatus.OFFLINE,
             max_slots=0,
         )
@@ -161,8 +142,8 @@ async def test_operator_profile_constraints(
     # 3. Ошибка при превышении максимального лимита (max_slots > 20)
     with pytest.raises(IntegrityError):
         invalid_slots_high = OperatorProfileModel(
-            user_id=user.id,
-            line_id=line.id,
+            user_id=user_id,
+            line_id=line_id,
             shift_status=OperatorShiftStatus.OFFLINE,
             max_slots=25,
         )

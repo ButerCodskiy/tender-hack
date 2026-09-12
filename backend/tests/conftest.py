@@ -1,36 +1,36 @@
 """Глобальные фикстуры тестового окружения на базе Testcontainers.
 
-Паттерн: session-scoped контейнер и engine по образцу microservices-shop/order-service,
-полностью изолирующий тесты от локальной рабочей базы данных.
+Паттерн: session-scoped контейнеры PostgreSQL и Redis,
+полностью изолирующие тесты от рабочей базы данных и очередей из docker-compose.yml.
 """
 
 import os
+import warnings
 from collections.abc import AsyncGenerator, Generator
 
-import pytest
-import redis.asyncio as aioredis
-from sqlalchemy.ext.asyncio import (
-    AsyncEngine,
-    AsyncSession,
-    create_async_engine,
-)
-from testcontainers.postgres import PostgresContainer
-
-from src.core.config import settings
-
-# Если SSL_CERT_FILE указывает на директорию (баг в окружении Windows),
-# удаляем его из окружения во избежание PermissionError в ssl/httpx
+# Защита от поврежденной переменной SSL_CERT_FILE (Windows)
 if "SSL_CERT_FILE" in os.environ and not os.path.isfile(
     os.environ["SSL_CERT_FILE"]
 ):
     os.environ.pop("SSL_CERT_FILE", None)
 
-# Отключаем Ryuk (сервис очистки testcontainers), т.к. на Docker Desktop (Windows)
-# он часто падает с ошибкой проброса портов
+# Отключаем Ryuk для Docker Desktop на Windows во избежание сбоев проброса портов
 os.environ["TESTCONTAINERS_RYUK_DISABLED"] = "true"
 
-# Запускаем контейнер до загрузки настроек и движка SQLAlchemy (если Docker доступен)
-_pg_container = None
+import pytest
+import redis.asyncio as aioredis
+from testcontainers.postgres import PostgresContainer
+
+try:
+    from testcontainers.community.redis import RedisContainer
+except ImportError:
+    from testcontainers.redis import RedisContainer
+
+# Запускаем контейнеры ДО первого импорта src.core.config и src.db.database,
+# чтобы Pydantic Settings и SQLAlchemy Engine прочитали динамические порты контейнеров!
+_pg_container: PostgresContainer | None = None
+_redis_container: RedisContainer | None = None
+
 try:
     _pg_container = PostgresContainer("postgres:16-alpine", driver="asyncpg")
     _pg_container.start()
@@ -39,16 +39,46 @@ try:
     os.environ["DB_USER"] = _pg_container.username
     os.environ["DB_PASS"] = _pg_container.password
     os.environ["DB_NAME"] = _pg_container.dbname
-except Exception:
+except Exception as e:
+    warnings.warn(
+        f"Не удалось запустить Testcontainers Postgres: {e}", stacklevel=2
+    )
     _pg_container = None
 
-from src.db.database import Base  # noqa: E402
+try:
+    _redis_container = RedisContainer("redis:7-alpine")
+    _redis_container.start()
+    os.environ["REDIS_HOST"] = _redis_container.get_container_host_ip()
+    os.environ["REDIS_PORT"] = str(_redis_container.get_exposed_port(6379))
+    os.environ["REDIS_DB"] = "0"
+except Exception as e:
+    warnings.warn(
+        f"Не удалось запустить Testcontainers Redis: {e}", stacklevel=2
+    )
+    _redis_container = None
+
+# Теперь импортируем настройки и базу данных — они подключаются к тестовым контейнерам!
+from sqlalchemy import select  # noqa: E402
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession  # noqa: E402
+
+from src.auth.models import RoleModel, UserRole  # noqa: E402
+from src.core.config import settings  # noqa: E402
+from src.db.database import Base, engine  # noqa: E402
+from src.operators.models import SupportLineModel  # noqa: E402
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
-    """Останавливает контейнер PostgreSQL по завершении всей тестовой сессии."""
+    """Останавливает тестовые контейнеры по завершении всей тестовой сессии."""
     if _pg_container is not None:
-        _pg_container.stop()
+        try:
+            _pg_container.stop()
+        except Exception:
+            pass
+    if _redis_container is not None:
+        try:
+            _redis_container.stop()
+        except Exception:
+            pass
 
 
 @pytest.fixture(scope="session")
@@ -62,21 +92,41 @@ def postgres_container() -> Generator[PostgresContainer, None, None]:
 
 
 @pytest.fixture(scope="session")
+def redis_container() -> Generator[RedisContainer, None, None]:
+    """Предоставляет инстанс контейнера Redis на время сессии."""
+    if _redis_container is None:
+        pytest.skip(
+            "Docker / Testcontainers Redis недоступен в текущем окружении"
+        )
+    yield _redis_container
+
+
+@pytest.fixture(scope="session")
 async def async_engine(
     postgres_container: PostgresContainer,
 ) -> AsyncGenerator[AsyncEngine, None]:
-    """Создает асинхронный движок один раз на всю сессию тестов."""
-    url = postgres_container.get_connection_url()
-    engine = create_async_engine(url, echo=False)
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
+    """Предоставляет сессионный асинхронный движок, привязанный к Testcontainers."""
     yield engine
 
-    async with engine.begin() as conn:
+
+@pytest.fixture(scope="session", autouse=True)
+async def init_test_db(
+    async_engine: AsyncEngine,
+) -> AsyncGenerator[None, None]:
+    """Создает таблицы и наполняет базу демонстрационными данными один раз на сессию."""
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    # Сидирование демонстрационных данных через seed_demo
+    from src.db.seed_demo import seed
+
+    await seed()
+
+    yield
+
+    async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
-    await engine.dispose()
+    await async_engine.dispose()
 
 
 @pytest.fixture(scope="function")
@@ -101,10 +151,16 @@ async def async_session(
 
 
 @pytest.fixture
-async def redis_client() -> AsyncGenerator[aioredis.Redis, None]:
-    """Предоставляет асинхронный клиент Redis для тестов."""
+async def redis_client(
+    redis_container: RedisContainer,
+) -> AsyncGenerator[aioredis.Redis, None]:
+    """Предоставляет асинхронный клиент Redis для тестов с очисткой тестовой базы."""
     client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
     yield client
+    try:
+        await client.flushdb()
+    except Exception:
+        pass
     await client.aclose()
 
 
@@ -119,3 +175,58 @@ async def setup_test_redis(
     yield
     if hasattr(app.state, "redis"):
         delattr(app.state, "redis")
+
+
+@pytest.fixture
+async def client_role(async_session: AsyncSession) -> RoleModel:
+    """Возвращает сидированную роль клиента."""
+    stmt = select(RoleModel).where(RoleModel.code == UserRole.CLIENT)
+    role = (await async_session.scalars(stmt)).first()
+    assert role is not None, (
+        "Роль client должна присутствовать в сидированной базе"
+    )
+    return role
+
+
+@pytest.fixture
+async def operator_role(async_session: AsyncSession) -> RoleModel:
+    """Возвращает сидированную роль оператора."""
+    stmt = select(RoleModel).where(RoleModel.code == UserRole.OPERATOR)
+    role = (await async_session.scalars(stmt)).first()
+    assert role is not None, (
+        "Роль operator должна присутствовать в сидированной базе"
+    )
+    return role
+
+
+@pytest.fixture
+async def supervisor_role(async_session: AsyncSession) -> RoleModel:
+    """Возвращает сидированную роль супервизора."""
+    stmt = select(RoleModel).where(RoleModel.code == UserRole.SUPERVISOR)
+    role = (await async_session.scalars(stmt)).first()
+    assert role is not None, (
+        "Роль supervisor должна присутствовать в сидированной базе"
+    )
+    return role
+
+
+@pytest.fixture
+async def admin_role(async_session: AsyncSession) -> RoleModel:
+    """Возвращает сидированную роль администратора."""
+    stmt = select(RoleModel).where(RoleModel.code == UserRole.ADMIN)
+    role = (await async_session.scalars(stmt)).first()
+    assert role is not None, (
+        "Роль admin должна присутствовать в сидированной базе"
+    )
+    return role
+
+
+@pytest.fixture
+async def support_line_l1(async_session: AsyncSession) -> SupportLineModel:
+    """Возвращает сидированную линию поддержки L1."""
+    stmt = select(SupportLineModel).where(SupportLineModel.code == "L1")
+    line = (await async_session.scalars(stmt)).first()
+    assert line is not None, (
+        "Линия L1 должна присутствовать в сидированной базе"
+    )
+    return line

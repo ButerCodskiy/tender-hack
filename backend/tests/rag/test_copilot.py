@@ -1,5 +1,6 @@
 """Тесты аналитической подсказки оператора AI Copilot (HIGH-04)."""
 
+import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -7,6 +8,7 @@ import uuid6
 from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src.auth.models import RoleModel, UserModel
 from src.chat.models import ChatModel, TicketModel, TicketStatus
@@ -440,12 +442,17 @@ async def test_ticket_copilot_summary_persistence(
 ) -> None:
     """Проверяет сохранение, извлечение и каскадное удаление модели TicketCopilotSummaryModel."""
     # 1. Создаем пользователя, чат и тикет
-    role = RoleModel(name="client", description="Клиент")
-    async_session.add(role)
-    await async_session.flush()
+    stmt = select(RoleModel).where(RoleModel.code == "client")
+    role = (await async_session.scalars(stmt)).first()
+    if not role:
+        role = RoleModel(code="client", name="Клиент", description="Клиент")
+        async_session.add(role)
+        await async_session.flush()
 
     user = UserModel(
-        email="copilot_user@test.ru", password_hash="hash", role_id=role.id
+        email=f"copilot_user_{uuid.uuid4().hex[:8]}@test.ru",
+        password_hash="hash",
+        role_id=role.id,
     )
     async_session.add(user)
     await async_session.flush()
@@ -479,7 +486,13 @@ async def test_ticket_copilot_summary_persistence(
     await async_session.commit()
 
     # 3. Извлекаем и проверяем отношение
-    refreshed_ticket = await async_session.get(TicketModel, ticket.id)
+    stmt_ticket = (
+        select(TicketModel)
+        .where(TicketModel.id == ticket.id)
+        .options(selectinload(TicketModel.copilot_summary))
+        .execution_options(populate_existing=True)
+    )
+    refreshed_ticket = (await async_session.scalars(stmt_ticket)).first()
     assert refreshed_ticket is not None
     assert refreshed_ticket.copilot_summary is not None
     assert (

@@ -623,18 +623,20 @@ async def test_service_delete_document_two_phase_success(
         hyp_questions=[],
     )
     async_session.add_all([doc, node, chunk])
-    await async_session.commit()
+    target_doc_id = doc.doc_id
+    target_node_id = node.node_id
 
-    del_resp = await service.delete_document(doc.doc_id)
+    del_resp = await service.delete_document(target_doc_id)
     assert del_resp.deleted is True
-    assert del_resp.doc_id == doc.doc_id
+    assert del_resp.doc_id == target_doc_id
 
     # Проверяем вызов очистки в Qdrant
     mock_qdrant.delete.assert_awaited_once()
 
     # Проверяем, что в БД документ и связанные сущности удалены
-    assert await repo.get_document_by_id(doc.doc_id) is None
-    assert await repo.get_node_by_id(node.node_id) is None
+    async_session.expire_all()
+    assert await repo.get_document_by_id(target_doc_id) is None
+    assert await repo.get_node_by_id(target_node_id) is None
 
 
 async def test_service_delete_document_qdrant_failure_rollback(

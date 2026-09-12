@@ -8,7 +8,7 @@ import pytest
 import redis.asyncio as aioredis
 from fastapi import status
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -34,31 +34,8 @@ from src.chat.models import (
 )
 from src.core.redis_client import RedisChatContext
 from src.core.security import create_access_token
-from src.db.database import Base, async_session_maker, engine
+from src.db.database import async_session_maker
 from src.main import app
-
-
-@pytest.fixture(autouse=True)
-async def setup_db() -> AsyncGenerator[None, None]:
-    """Гарантирует актуальную схему таблиц и очищает данные перед каждым тестом."""
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        await conn.execute(
-            text(
-                "TRUNCATE TABLE message_sources, messages, tickets, chats, "
-                "support_lines, client_profiles, users, roles "
-                "RESTART IDENTITY CASCADE;"
-            )
-        )
-    yield
-    async with engine.begin() as conn:
-        await conn.execute(
-            text(
-                "TRUNCATE TABLE message_sources, messages, tickets, chats, "
-                "support_lines, client_profiles, users, roles "
-                "RESTART IDENTITY CASCADE;"
-            )
-        )
 
 
 @pytest.fixture
@@ -71,10 +48,9 @@ async def redis_context(
 
 
 @pytest.fixture
-async def test_session() -> AsyncGenerator[AsyncSession, None]:
-    """Предоставляет изолированную сессию базы данных PostgreSQL."""
-    async with async_session_maker() as session:
-        yield session
+async def test_session(async_session: AsyncSession) -> AsyncSession:
+    """Предоставляет изолированную сессию базы данных PostgreSQL с откатом изменений."""
+    return async_session
 
 
 @pytest.fixture
@@ -99,12 +75,15 @@ async def client(
 @pytest.fixture
 async def client_user(test_session: AsyncSession) -> UserModel:
     """Создает тестового пользователя с ролью клиента."""
-    role = RoleModel(id=1, code="client", name="Клиент")
-    test_session.add(role)
-    await test_session.flush()
+    stmt_role = select(RoleModel).where(RoleModel.code == "client")
+    role = (await test_session.scalars(stmt_role)).first()
+    if not role:
+        role = RoleModel(code="client", name="Клиент")
+        test_session.add(role)
+        await test_session.flush()
 
     user = UserModel(
-        email="test_client_streaming@zakupki.mos.ru",
+        email=f"test_client_streaming_{uuid.uuid4().hex[:8]}@zakupki.mos.ru",
         password_hash="fake_hash",
         full_name="Иван Заказчиков",
         role_id=role.id,
