@@ -3,6 +3,7 @@
 import json
 import logging
 from collections.abc import AsyncIterator
+from typing import Any
 
 import httpx
 
@@ -141,6 +142,82 @@ class OllamaStreamClient:
                 raise ConnectionError(
                     f"Ollama host unreachable at {self.base_url}"
                 ) from err
+
+    async def generate_json(
+        self,
+        prompt: str,
+        system_prompt: str,
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
+        """Генерирует структурированный ответ с принудительным форматом JSON."""
+        request_timeout = timeout or self.default_timeout
+        endpoint = f"{self.base_url}/api/chat"
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            "think": False,
+            "stream": False,
+            "format": "json",
+            "options": {
+                "temperature": 0.1,
+                "top_p": 0.9,
+                "num_predict": 800,
+            },
+        }
+
+        timeout_config = httpx.Timeout(request_timeout, connect=5.0)
+        async with httpx.AsyncClient(timeout=timeout_config) as client:
+            try:
+                response = await client.post(endpoint, json=payload)
+                if response.status_code != 200:
+                    logger.error(
+                        f"Ollama API вернул статус {response.status_code}: {response.text}"
+                    )
+                    raise RuntimeError(
+                        f"Ollama API error: status {response.status_code}"
+                    )
+                data = response.json()
+                message = data.get("message", {})
+                content = message.get("content", "")
+                if not content and "thinking" in message:
+                    content = message.get("thinking", "")
+
+                cleaned = content.strip()
+                if cleaned.startswith("```"):
+                    # Удаление code fence markdown
+                    lines = cleaned.splitlines()
+                    if lines and lines[0].startswith("```"):
+                        lines = lines[1:]
+                    if lines and lines[-1].startswith("```"):
+                        lines = lines[:-1]
+                    cleaned = "\n".join(lines).strip()
+
+                start_idx = cleaned.find("{")
+                end_idx = cleaned.rfind("}")
+                if start_idx != -1 and end_idx != -1 and end_idx >= start_idx:
+                    cleaned = cleaned[start_idx : end_idx + 1]
+
+                parsed = json.loads(cleaned)
+                if not isinstance(parsed, dict):
+                    raise TypeError(
+                        f"Ожидался JSON-объект, получено: {type(parsed)}"
+                    )
+                return parsed
+            except (httpx.ConnectError, httpx.ConnectTimeout) as err:
+                logger.error(
+                    f"Не удалось подключиться к Ollama по адресу {self.base_url}: {err}."
+                )
+                raise ConnectionError(
+                    f"Ollama host unreachable at {self.base_url}"
+                ) from err
+            except httpx.ReadTimeout as err:
+                logger.error(
+                    f"Превышен таймаут ответа Ollama ({request_timeout}s): {err}"
+                )
+                raise TimeoutError("Ollama JSON response timeout") from err
 
 
 def get_llm_stream_client() -> OllamaStreamClient:

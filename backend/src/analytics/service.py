@@ -15,7 +15,7 @@ from starlette import status as http_status
 
 from src.analytics.evaluator import (
     AuditLlmClientProtocol,
-    MockAuditLlmClient,
+    OllamaAuditLlmClient,
     build_audit_dialog_context,
 )
 from src.analytics.models import (
@@ -59,7 +59,7 @@ class AnalyticsService:
     ) -> None:
         self.session = session
         self.redis = redis
-        self.evaluator = evaluator or MockAuditLlmClient()
+        self.evaluator = evaluator or OllamaAuditLlmClient()
         self.analytics_repo = analytics_repo or AnalyticsRepository(session)
         self.ticket_repo = ticket_repo or TicketRepository(session)
 
