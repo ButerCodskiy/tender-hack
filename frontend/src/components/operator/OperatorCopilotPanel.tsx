@@ -14,6 +14,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { OperatorTicketWorkspace } from '../../types/operator';
+import { MarkdownView } from '../common/MarkdownView';
 
 interface OperatorCopilotPanelProps {
   workspace: OperatorTicketWorkspace | null;
@@ -155,9 +156,9 @@ export const OperatorCopilotPanel: React.FC<OperatorCopilotPanelProps> = ({
               <Sparkles className="size-3.5 text-[#264b82]" />
               <span>Суть проблемы (ИИ-анализ)</span>
             </div>
-            <p className="text-xs text-[#1a1a1a] leading-relaxed">
-              {copilot_summary.summary}
-            </p>
+            <div className="text-xs text-[#1a1a1a] leading-relaxed">
+              <MarkdownView content={copilot_summary.summary} />
+            </div>
           </div>
         )}
 
@@ -179,9 +180,9 @@ export const OperatorCopilotPanel: React.FC<OperatorCopilotPanelProps> = ({
                 <span>Вставить в ответ</span>
               </button>
             </div>
-            <p className="text-xs text-[#1a1a1a] leading-relaxed bg-[#f7f8f9] p-2.5 rounded-none border border-[#e5e5e5] break-words [overflow-wrap:anywhere]">
-              {copilot_summary.suggested_response}
-            </p>
+            <div className="text-xs text-[#1a1a1a] leading-relaxed bg-[#f7f8f9] p-2.5 rounded-none border border-[#e5e5e5] break-words [overflow-wrap:anywhere]">
+              <MarkdownView content={copilot_summary.suggested_response} />
+            </div>
           </div>
         )}
 

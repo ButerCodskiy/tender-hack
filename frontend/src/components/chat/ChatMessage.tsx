@@ -14,6 +14,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { Message } from '../../types/chat';
+import { MarkdownView } from '../common/MarkdownView';
 
 interface ChatMessageProps {
   message: Message;
@@ -136,7 +137,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           ) : (
             <>
               <div className="bg-[#eaf6ff] border border-[#b9dbf7] rounded-none px-4 py-3 text-[#1a1a1a] text-[14px] max-w-full min-w-0 break-words">
-                <p className="whitespace-pre-wrap leading-relaxed break-words [overflow-wrap:anywhere]">{message.content}</p>
+                <MarkdownView content={message.content} />
               </div>
 
               {/* Action Buttons */}
@@ -233,15 +234,17 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 
       {/* Message Content Bubble */}
       <div className={`bg-white border border-[#e5e5e5] ${senderConfig.bubbleBorderClass} rounded-none p-4 text-[#1a1a1a] text-[14px] leading-relaxed space-y-3 min-w-0`}>
-        <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-          {message.content}
-          {message.isStreaming && (
+        {message.isStreaming ? (
+          <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+            {message.content}
             <span
               aria-hidden="true"
               className="inline-block w-1.5 h-4 ml-1 bg-[#db2b21] animate-pulse align-middle"
             />
-          )}
-        </div>
+          </div>
+        ) : (
+          <MarkdownView content={message.content} />
+        )}
 
         {/* RAG Citations */}
         {message.citations && message.citations.length > 0 && (
