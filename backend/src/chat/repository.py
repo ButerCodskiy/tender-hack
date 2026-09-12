@@ -250,6 +250,7 @@ class ChatRepository:
             .where(TicketModel.chat_id == chat_id)
             .options(
                 selectinload(MessageModel.sources),
+                selectinload(MessageModel.ticket),
                 selectinload(MessageModel.sender).selectinload(UserModel.role),
             )
             .order_by(MessageModel.created_at.desc())

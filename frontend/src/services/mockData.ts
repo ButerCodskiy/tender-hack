@@ -143,6 +143,27 @@ export async function simulateMockChatStream(
   content: string,
   callbacks: StreamCallbacks
 ): Promise<void> {
+  const lower = content.toLowerCase();
+  const profanityPatterns = [
+    /ху[йеяиюё]/i,
+    /пизд/i,
+    /еб[аеёиуыл]/i,
+    /бл[яе]/i,
+    /сук[аи]/i,
+    /муда[кч]/i,
+    /пидор/i,
+    /гондон/i,
+    /шлюх/i,
+  ];
+  if (profanityPatterns.some((p) => p.test(lower))) {
+    await delay(300);
+    callbacks.onSessionTerminated?.(
+      'profanity',
+      'Ваше обращение завершено в связи с нарушением правил общения (использование нецензурной лексики). Пожалуйста, сформируйте новое обращение в корректной форме.'
+    );
+    return;
+  }
+
   const answerData = findKnowledgeAnswer(content);
 
   // Шаг 1: Статус поиска

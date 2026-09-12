@@ -150,6 +150,15 @@ export async function streamChatMessage(
         // ignore parse error
       }
 
+      if (
+        errMessage.includes('нарушением правил') ||
+        errMessage.includes('нецензурной') ||
+        errMessage.includes('модерац')
+      ) {
+        callbacks.onSessionTerminated?.('profanity', errMessage);
+        return;
+      }
+
       const serverErr = new Error(errMessage);
       callbacks.onError?.(serverErr);
       throw serverErr;

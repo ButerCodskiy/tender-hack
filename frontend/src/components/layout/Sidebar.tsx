@@ -224,6 +224,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           {session.status === 'escalated_to_operator' && (
                             <span className="size-2 rounded-full bg-[#f67319] shrink-0" title="У оператора" />
                           )}
+                          {session.status === 'moderation_closed' && (
+                            <span className="size-2 rounded-full bg-[#d32f2f] shrink-0" title="Заблокировано модерацией" />
+                          )}
                         </>
                       )}
                     </button>

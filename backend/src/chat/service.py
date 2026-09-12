@@ -19,6 +19,7 @@ from src.chat.models import (
     TicketModel,
     TicketPriority,
     TicketStatus,
+    TERMINAL_TICKET_STATUSES,
 )
 from src.chat.moderation import (
     ProfanityModerator,
@@ -205,6 +206,38 @@ class ChatService:
                 chat.id
             )
 
+        # Если обращение уже завершено (например, закрыто модерацией), запрещаем продолжать переписку
+        if (
+            active_ticket is not None
+            and active_ticket.status in TERMINAL_TICKET_STATUSES
+        ):
+            if active_ticket.status == TicketStatus.CLOSED_BY_MODERATION:
+                detail_msg = (
+                    "Ваше обращение закрыто в связи с нарушением правил общения "
+                    "(использование нецензурной лексики). Пожалуйста, сформируйте "
+                    "новое обращение в корректной форме."
+                )
+                reason = "profanity"
+            else:
+                detail_msg = "Обращение уже завершено. Пожалуйста, начните новый диалог."
+                reason = "closed"
+
+            if accept_header and "text/event-stream" in accept_header:
+                event_data = json.dumps(
+                    {
+                        "reason": reason,
+                        "message": detail_msg,
+                    },
+                    ensure_ascii=False,
+                )
+                yield f"event: session_terminated\ndata: {event_data}\n\n"
+                return
+
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=detail_msg,
+            )
+
         # 1. Проверка модератором обсценной лексики
         moderation_result = self.moderator.check_profanity(payload.text)
         if moderation_result.is_profane:
@@ -235,12 +268,37 @@ class ChatService:
             await self.session.commit()
 
             # Очищаем оперативный контекст диалога в Redis
-            await self.redis_context.clear_context(active_ticket.id)
+            if self.redis_context is not None:
+                await self.redis_context.clear_context(active_ticket.id)
 
             termination_msg = (
                 "Ваше обращение завершено в связи с нарушением правил общения "
                 "(использование нецензурной лексики). Пожалуйста, сформируйте "
                 "новое обращение в корректной форме."
+            )
+
+            if self.ticket_events is not None:
+                await self.ticket_events.publish_session_terminated(
+                    ticket_id=active_ticket.id,
+                    reason="profanity",
+                    message=termination_msg,
+                )
+                await self.ticket_events.publish_ticket_resolved(
+                    ticket_id=active_ticket.id,
+                    operator_id=active_ticket.assigned_operator_id,
+                    closed_at=active_ticket.closed_at,
+                )
+
+            if (
+                active_ticket.line is not None
+                and active_ticket.assigned_operator_id is not None
+            ):
+                await self._safe_dispatch_task(
+                    active_ticket.line.code, "slot_freed"
+                )
+
+            await self._safe_enqueue_audit(
+                active_ticket.id, "closed_by_moderation"
             )
 
             if accept_header and "text/event-stream" in accept_header:
@@ -669,6 +727,11 @@ class ChatService:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Обращение не найдено",
+            )
+        if ticket.status in TERMINAL_TICKET_STATUSES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Обращение уже завершено",
             )
 
         operator_message = MessageModel(

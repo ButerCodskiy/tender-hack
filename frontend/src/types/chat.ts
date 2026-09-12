@@ -24,6 +24,9 @@ export interface Message {
   needsFeedbackButtons?: boolean;
   statusText?: string;
   isStreaming?: boolean;
+  moderation_status?: 'passed' | 'flagged' | 'blocked';
+  moderation_reason?: string;
+  ticket_status?: string;
 }
 
 export interface ChatSession {

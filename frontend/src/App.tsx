@@ -25,6 +25,8 @@ import {
   ShieldCheck,
   Headphones,
   UserCheck,
+  AlertTriangle,
+  Plus,
 } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -133,6 +135,7 @@ export const App: React.FC = () => {
                 ? 'ИИ-Ассистент Портала Поставщиков'
                 : undefined);
 
+            const isBlocked = (m as any).moderation_status === 'blocked';
             const frontendMsg: Message = {
               id: m.id,
               ticket_id: tId,
@@ -146,12 +149,17 @@ export const App: React.FC = () => {
               sender_type: m.sender_type,
               sender_name: senderName,
               sender_role: m.sender_role || m.sender_type,
+              moderation_status: (m as any).moderation_status,
+              moderation_reason: (m as any).moderation_reason,
+              ticket_status: (m as any).ticket_status,
               timestamp: new Date(m.created_at).toLocaleTimeString([], {
                 hour: '2-digit',
                 minute: '2-digit',
               }),
               actions:
-                m.sender_type === 'client'
+                isBlocked
+                  ? ['copy']
+                  : m.sender_type === 'client'
                   ? ['copy', 'edit']
                   : m.sender_type === 'bot'
                   ? ['copy', 'regenerate', 'thumbs_up', 'thumbs_down']
@@ -184,7 +192,19 @@ export const App: React.FC = () => {
               : 'Консультация по регламенту';
 
             const isActive = state.active_ticket && tId === state.active_ticket.id;
-            const status = isActive
+            const isModerationClosed =
+              msgs.some(
+                (m) =>
+                  m.moderation_status === 'blocked' ||
+                  m.ticket_status === 'closed_by_moderation'
+              ) ||
+              (state.active_ticket &&
+                tId === state.active_ticket.id &&
+                state.active_ticket.status === 'closed_by_moderation');
+
+            const status = isModerationClosed
+              ? 'moderation_closed'
+              : isActive
               ? state.active_ticket?.status === 'resolved'
                 ? 'resolved'
                 : state.active_ticket?.status === 'in_progress' ||
@@ -319,6 +339,41 @@ export const App: React.FC = () => {
           )
         );
         setIsCsatModalOpen(true);
+      } else if (event === 'session_terminated') {
+        const targetTicketId = data.ticket_id || activeTicketId;
+        setSessions((prev) =>
+          prev.map((s) => {
+            if (targetTicketId && s.id !== targetTicketId) return s;
+            const alreadyHasModerationNotice = s.messages.some(
+              (m) =>
+                m.content.includes('нарушением правил') ||
+                m.content.includes('нецензурной лексики')
+            );
+            if (alreadyHasModerationNotice) {
+              return {
+                ...s,
+                status: 'moderation_closed',
+              };
+            }
+            const termMessage: Message = {
+              id: `term-${Date.now()}`,
+              ticket_id: targetTicketId || undefined,
+              content:
+                data.message ||
+                'Ваше обращение завершено в связи с нарушением правил общения (использование нецензурной лексики). Пожалуйста, сформируйте новое обращение в корректной форме.',
+              type: 'system',
+              sender_type: 'system',
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              actions: [],
+            };
+            return {
+              ...s,
+              status: 'moderation_closed',
+              messages: [...s.messages, termMessage],
+            };
+          })
+        );
+        setActiveTicketId(null);
       }
     });
 
@@ -334,6 +389,11 @@ export const App: React.FC = () => {
   };
 
   const handleSend = async (customPrompt?: string) => {
+    const currentSession = sessions.find((s) => s.id === activeSessionId);
+    if (currentSession?.status === 'moderation_closed') {
+      return;
+    }
+
     const textToSend = (customPrompt || inputValue).trim();
     if (!textToSend || isSending) return;
 
@@ -485,22 +545,48 @@ export const App: React.FC = () => {
             setSessions((prev) =>
               prev.map((s) => {
                 if (s.id !== targetSessionId) return s;
+                const alreadyHasModerationNotice = s.messages.some(
+                  (m) =>
+                    m.content.includes('нарушением правил') ||
+                    m.content.includes('нецензурной лексики')
+                );
+                const cleanedMessages = s.messages
+                  .filter((m) => m.id !== botMessageId)
+                  .map((m) =>
+                    m.id === userMessage.id
+                      ? {
+                          ...m,
+                          moderation_status: 'blocked' as const,
+                          moderation_reason: 'profanity',
+                          actions: ['copy' as const],
+                        }
+                      : m
+                  );
+                if (alreadyHasModerationNotice) {
+                  return {
+                    ...s,
+                    status: 'moderation_closed',
+                    messages: cleanedMessages,
+                  };
+                }
+                const modMessage: Message = {
+                  id: `mod-${Date.now()}`,
+                  content:
+                    message ||
+                    'Ваше обращение завершено в связи с нарушением правил общения (использование нецензурной лексики). Пожалуйста, сформируйте новое обращение в корректной форме.',
+                  type: 'system',
+                  sender_type: 'system',
+                  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  actions: [],
+                };
                 return {
                   ...s,
                   status: 'moderation_closed',
-                  messages: [
-                    ...s.messages.filter((m) => m.id !== botMessageId),
-                    {
-                      id: `mod-${Date.now()}`,
-                      content: message || 'Обращение закрыто по правилам регламента.',
-                      type: 'system',
-                      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                      actions: [],
-                    },
-                  ],
+                  messages: [...cleanedMessages, modMessage],
                 };
               })
             );
+            setActiveTicketId(null);
             setIsSending(false);
           },
         }
@@ -518,10 +604,20 @@ export const App: React.FC = () => {
         setUser(null);
       }
 
+      const isModerationErr =
+        errMsg.includes('нарушением правил') ||
+        errMsg.includes('нецензурной') ||
+        errMsg.includes('модерац');
+
+      if (isModerationErr) {
+        setActiveTicketId(null);
+      }
+
       const errorMessage: Message = {
         id: `err-${Date.now()}`,
         content: errMsg,
         type: 'system',
+        sender_type: 'system',
         timestamp: new Date().toLocaleTimeString([], {
           hour: '2-digit',
           minute: '2-digit',
@@ -532,6 +628,41 @@ export const App: React.FC = () => {
       setSessions((prev) =>
         prev.map((s) => {
           if (s.id !== targetSessionId) return s;
+
+          if (isModerationErr) {
+            const alreadyHasModerationNotice = s.messages.some(
+              (m) =>
+                m.content.includes('нарушением правил') ||
+                m.content.includes('нецензурной лексики')
+            );
+            const cleanedMessages = s.messages
+              .filter((m) => m.id !== botMessageId)
+              .map((m) =>
+                m.id === userMessage.id
+                  ? {
+                      ...m,
+                      moderation_status: 'blocked' as const,
+                      moderation_reason: 'profanity',
+                      actions: ['copy' as const],
+                    }
+                  : m
+              );
+
+            if (alreadyHasModerationNotice) {
+              return {
+                ...s,
+                status: 'moderation_closed',
+                messages: cleanedMessages,
+              };
+            }
+
+            return {
+              ...s,
+              status: 'moderation_closed',
+              messages: [...cleanedMessages, errorMessage],
+            };
+          }
+
           const existingBot = s.messages.find((m) => m.id === botMessageId);
           if (
             existingBot &&
@@ -550,6 +681,7 @@ export const App: React.FC = () => {
               ],
             };
           }
+
           return {
             ...s,
             messages: [
@@ -770,12 +902,21 @@ export const App: React.FC = () => {
                   </h2>
                   <div className="flex items-center gap-2 text-xs text-[#7f8792]">
                     <span className="flex items-center gap-1 font-medium">
-                      <ShieldCheck className="size-3 text-[#0d9b68]" />
-                      {activeSession.status === 'resolved'
-                        ? 'Вопрос решен'
-                        : activeSession.status === 'escalated_to_operator'
-                        ? 'На линии оператора'
-                        : 'ИИ-Консультация активна'}
+                      {activeSession.status === 'moderation_closed' ? (
+                        <>
+                          <AlertTriangle className="size-3 text-[#c62828]" />
+                          <span className="text-[#c62828] font-bold">Диалог закрыт модерацией</span>
+                        </>
+                      ) : (
+                        <>
+                          <ShieldCheck className="size-3 text-[#0d9b68]" />
+                          {activeSession.status === 'resolved'
+                            ? 'Вопрос решен'
+                            : activeSession.status === 'escalated_to_operator'
+                            ? 'На линии оператора'
+                            : 'ИИ-Консультация активна'}
+                        </>
+                      )}
                     </span>
                     <span>•</span>
                     <span>{activeSession.messages.length} сообщений</span>
@@ -872,22 +1013,47 @@ export const App: React.FC = () => {
                       onResolveTicket={handleResolveTicket}
                       onEscalateToOperator={handleEscalateToOperator}
                       isEscalated={activeSession.status === 'escalated_to_operator'}
+                      isModerationClosed={activeSession.status === 'moderation_closed'}
                     />
                   ))}
                   <div ref={messagesEndRef} />
                 </div>
               </div>
 
-              {/* Sticky Bottom Composer */}
-              <div className="p-3 border-t border-[#e5e5e5] bg-white">
-                <ChatComposer
-                  variant="bottom"
-                  inputValue={inputValue}
-                  onInputChange={setInputValue}
-                  onSend={() => handleSend()}
-                  isSending={isSending}
-                />
-              </div>
+              {/* Sticky Bottom Composer OR Moderation Closed Notice */}
+              {activeSession.status === 'moderation_closed' ? (
+                <div className="p-4 border-t border-[#ffcdd2] bg-[#fff5f5] flex flex-col sm:flex-row items-center justify-between gap-4 text-[#c62828] shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="size-9 rounded-none bg-[#ffebee] border border-[#ffcdd2] flex items-center justify-center shrink-0">
+                      <AlertTriangle className="size-5 text-[#c62828]" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-[#c62828]">Диалог закрыт модерацией</p>
+                      <p className="text-xs text-[#555555] mt-0.5">
+                        В переписке была зафиксирована ненормативная лексика. Чат закрыт, ввод сообщений заблокирован.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleNewChat}
+                    className="shrink-0 px-4 py-2 bg-[#c62828] hover:bg-[#b71c1c] text-white text-xs font-bold rounded-none transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                  >
+                    <Plus className="size-4" />
+                    Начать новый диалог
+                  </button>
+                </div>
+              ) : (
+                <div className="p-3 border-t border-[#e5e5e5] bg-white">
+                  <ChatComposer
+                    variant="bottom"
+                    inputValue={inputValue}
+                    onInputChange={setInputValue}
+                    onSend={() => handleSend()}
+                    isSending={isSending}
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>
