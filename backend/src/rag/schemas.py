@@ -18,6 +18,16 @@ class RagQueryRequestSchema(BaseModel):
             "Как подписать протокол разногласий на Портале поставщиков?"
         ],
     )
+
+    @field_validator("query", mode="before")
+    @classmethod
+    def sanitize_query(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            v = v.strip()
+            if len(v) > 4000:
+                return v[:4000]
+        return v
+
     message_id: UUID | None = Field(
         default=None,
         description="Идентификатор сообщения диалога для сквозной трассировки и события done",

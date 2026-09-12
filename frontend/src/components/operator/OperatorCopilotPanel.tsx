@@ -38,7 +38,7 @@ export const OperatorCopilotPanel: React.FC<OperatorCopilotPanelProps> = ({
 
   if (!workspace) {
     return (
-      <aside className="w-88 border-l border-[#e5e5e5] bg-white h-dvh p-6 flex flex-col justify-center items-center text-center select-none shrink-0">
+      <aside className="w-88 border-l border-[#e5e5e5] bg-white h-full p-6 flex flex-col justify-center items-center text-center select-none shrink-0">
         <Sparkles className="size-10 text-[#cccccc] mb-3" />
         <span className="text-xs font-bold text-[#666666]">
           Контекст и ИИ-Копилот
@@ -53,7 +53,7 @@ export const OperatorCopilotPanel: React.FC<OperatorCopilotPanelProps> = ({
   const { client, copilot_summary } = workspace;
 
   return (
-    <aside className="w-96 border-l border-[#e5e5e5] bg-[#f7f8f9] h-dvh flex flex-col shrink-0 select-none overflow-hidden z-10">
+    <aside className="w-96 border-l border-[#e5e5e5] bg-[#f7f8f9] h-full flex flex-col shrink-0 select-none overflow-hidden z-10">
       {/* Panel Header */}
       <div className="h-14 px-4 border-b border-[#e5e5e5] flex items-center justify-between shrink-0 bg-white">
         <div className="flex items-center gap-2.5">

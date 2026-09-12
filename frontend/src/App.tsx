@@ -18,7 +18,7 @@ import {
   submitFeedback,
   subscribeChatEvents,
 } from './services/api';
-import { getStoredUser, clearStoredAuth, fetchCurrentUser, DEMO_USERS } from './services/auth';
+import { getStoredUser, clearStoredAuth, fetchCurrentUser, loginUser, DEMO_USERS } from './services/auth';
 import { isStandaloneMode, setStandaloneMode, onModeChange } from './config/mode';
 import {
   Sparkles,
@@ -653,12 +653,24 @@ export const App: React.FC = () => {
     handleSend(newContent);
   };
 
-  const handleQuickSwitchRole = (mode: 'client' | 'operator' | 'analytics') => {
+  const handleQuickSwitchRole = async (mode: 'client' | 'operator' | 'analytics') => {
     setViewMode(mode);
-    if (!user) {
-      const demoRole = mode === 'analytics' ? 'supervisor' : mode === 'operator' ? 'operator' : 'client';
-      const demoUser = DEMO_USERS.find((u) => u.role === demoRole);
-      if (demoUser) {
+    const demoRole =
+      mode === 'analytics'
+        ? 'supervisor'
+        : mode === 'operator'
+          ? 'operator'
+          : 'client';
+    const demoUser = DEMO_USERS.find((u) => u.role === demoRole);
+    if (demoUser) {
+      try {
+        const auth = await loginUser(
+          demoUser.email,
+          demoUser.defaultPassword || 'password123'
+        );
+        setUser(auth.user);
+      } catch (err) {
+        console.warn('Авторизация демо-пользователя:', err);
         const dummyProfile: UserProfile = {
           id: `demo-${demoUser.role}`,
           role_code: demoUser.role,
@@ -803,8 +815,8 @@ export const App: React.FC = () => {
     return (
       <div className="h-dvh w-full flex flex-col overflow-hidden bg-[#F5F6F8]">
         {renderDemoHeader()}
-        <div className="flex-1 overflow-hidden">
-          <SupervisorDashboard onBackToOperator={() => setViewMode('operator')} />
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <SupervisorDashboard onBackToOperator={() => handleQuickSwitchRole('operator')} />
         </div>
       </div>
     );
@@ -814,7 +826,7 @@ export const App: React.FC = () => {
     return (
       <div className="h-dvh w-full flex flex-col overflow-hidden">
         {renderDemoHeader()}
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-hidden">
           <OperatorWorkspace
             user={user}
             onLogout={() => {
@@ -822,7 +834,7 @@ export const App: React.FC = () => {
               setUser(null);
               setViewMode('client');
             }}
-            onSwitchToClientMode={() => setViewMode('client')}
+            onSwitchToClientMode={() => handleQuickSwitchRole('client')}
           />
         </div>
         {isAuthOpen && (

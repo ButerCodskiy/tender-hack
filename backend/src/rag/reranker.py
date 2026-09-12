@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import TYPE_CHECKING, ClassVar
 
 if TYPE_CHECKING:
     from src.rag.schemas import ContextChunk
+
+logger = logging.getLogger(__name__)
 
 
 class LexicalDenseReranker:
@@ -173,3 +176,135 @@ class LexicalDenseReranker:
 
 # Алиас для спецификаций
 HybridReranker = LexicalDenseReranker
+
+
+class TransformerCrossEncoderReranker(LexicalDenseReranker):
+    """Нейросетевой Cross-Encoder реранкер на базе библиотеки transformers.
+
+    Использует архитектуру Sequence Classification (например, BAAI/bge-reranker-base или
+    bge-reranker-v2-m3) для попарной оценки (запрос, фрагмент).
+    В случае недоступности весов модели или сетевых ограничений выполняет плавный
+    фолбэк на гибридный LexicalDenseReranker с сохранением всех гарантий ADR-0001 / ADR-0006.
+    """
+
+    def __init__(
+        self,
+        model_name_or_path: str = "BAAI/bge-reranker-base",
+        device: str = "cpu",
+        dense_weight: float = 0.65,
+        lexical_weight: float = 0.35,
+    ) -> None:
+        """Инициализирует трансформерный реранкер с опцией лексического фолбэка."""
+        super().__init__(
+            dense_weight=dense_weight, lexical_weight=lexical_weight
+        )
+        self.model_name_or_path = model_name_or_path
+        self.device = device
+        self._model = None
+        self._tokenizer = None
+
+    def _lazy_init(self) -> None:
+        if self._model is not None and self._tokenizer is not None:
+            return
+        try:
+            from transformers import (
+                AutoModelForSequenceClassification,
+                AutoTokenizer,
+            )
+
+            try:
+                self._tokenizer = AutoTokenizer.from_pretrained(
+                    self.model_name_or_path, local_files_only=True
+                )
+                self._model = (
+                    AutoModelForSequenceClassification.from_pretrained(
+                        self.model_name_or_path, local_files_only=True
+                    ).to(self.device)
+                )
+            except Exception:
+                self._tokenizer = AutoTokenizer.from_pretrained(
+                    self.model_name_or_path
+                )
+                self._model = (
+                    AutoModelForSequenceClassification.from_pretrained(
+                        self.model_name_or_path
+                    ).to(self.device)
+                )
+            self._model.eval()
+            logger.info(
+                "TransformerCrossEncoderReranker loaded successfully with %s on %s",
+                self.model_name_or_path,
+                self.device,
+            )
+        except Exception as exc:
+            # Если локальные веса отсутствуют или идет загрузка, плавно работаем в режиме гибридного лексико-плотного фолбэка
+            logger.debug(
+                "TransformerCrossEncoderReranker not active (%s), using LexicalDense fallback",
+                exc,
+            )
+            self._model = None
+            self._tokenizer = None
+
+    def rerank(
+        self,
+        query: str,
+        chunks: list[ContextChunk],
+    ) -> list[ContextChunk]:
+        """Выполняет переранжирование через transformer cross-encoder или гибридный фолбэк."""
+        self._lazy_init()
+        if self._model is None or self._tokenizer is None or not chunks:
+            return super().rerank(query, chunks)
+
+        import torch
+
+        scored_chunks: list[tuple[float, bool, ContextChunk]] = []
+        pairs = []
+        for chunk in chunks:
+            text = f"{chunk.title or ''} {chunk.quote_text or ''}".strip()
+            pairs.append([query, text])
+
+        try:
+            with torch.no_grad():
+                inputs = self._tokenizer(
+                    pairs,
+                    padding=True,
+                    truncation=True,
+                    max_length=512,
+                    return_tensors="pt",
+                ).to(self.device)
+                scores = (
+                    self._model(**inputs, return_dict=True)
+                    .logits.view(-1)
+                    .float()
+                )
+                scores = torch.sigmoid(scores).cpu().tolist()
+                if isinstance(scores, float):
+                    scores = [scores]
+        except Exception:
+            return super().rerank(query, chunks)
+
+        for chunk, neural_score in zip(chunks, scores, strict=False):
+            exact_boost, is_pinned = self.compute_exact_match_boost(
+                query, chunk
+            )
+            final_score = float(neural_score) + exact_boost
+            normalized_score = (
+                1.0 if is_pinned else min(1.0, round(final_score, 4))
+            )
+            updated = chunk.model_copy(
+                update={
+                    "relevance_score": normalized_score,
+                    "pin_to_top": is_pinned,
+                }
+            )
+            scored_chunks.append((final_score, is_pinned, updated))
+
+        scored_chunks.sort(
+            key=lambda item: (1 if item[1] else 0, item[0]), reverse=True
+        )
+        return [c for _, _, c in scored_chunks]
+
+
+# Алиасы для спецификаций
+TransformerReranker = TransformerCrossEncoderReranker
+NeuralReranker = TransformerCrossEncoderReranker

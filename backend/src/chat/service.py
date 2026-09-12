@@ -507,12 +507,11 @@ class ChatService:
             return
 
         # 5. Полноценный запуск RAG с контекстом диалога
-        effective_query = (
-            route_output.standalone_query.strip()
-            if getattr(route_output, "standalone_query", None)
-            and route_output.standalone_query.strip()
-            else payload.text
-        )
+        effective_query = payload.text
+        if getattr(route_output, "standalone_query", None):
+            sq = route_output.standalone_query.strip()
+            if sq and len(sq) <= 2000 and "ИСТОРИЯ ДИАЛОГА" not in sq:
+                effective_query = sq
         bot_message_id = uuid6.uuid7()
         rag_request = RagQueryRequestSchema(
             query=effective_query,

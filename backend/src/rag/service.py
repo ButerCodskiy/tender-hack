@@ -8,7 +8,10 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from src.rag.generator import RagStreamGenerator
-from src.rag.reranker import LexicalDenseReranker
+from src.rag.reranker import (
+    LexicalDenseReranker,
+    TransformerCrossEncoderReranker,
+)
 from src.rag.retriever import Retriever
 from src.rag.schemas import (
     ContextChunk,
@@ -39,7 +42,7 @@ class RagService:
         """Инициализирует RagService с генератором ответа, ретривером и реранкером."""
         self.generator = generator or RagStreamGenerator()
         self.retriever = retriever or Retriever()
-        self.reranker = reranker or LexicalDenseReranker()
+        self.reranker = reranker or TransformerCrossEncoderReranker()
 
     async def _retrieve_context_chunks(
         self, payload: RagQueryRequestSchema

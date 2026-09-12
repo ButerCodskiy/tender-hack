@@ -56,6 +56,14 @@ class MockLlmClient:
         if self.default_response is not None:
             return self.default_response.model_copy(deep=True)
 
+        query_text = prompt.strip()
+        if "ТЕКУЩЕЕ СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ:\n" in prompt:
+            query_text = (
+                prompt.split("ТЕКУЩЕЕ СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ:\n", 1)[1]
+                .split("\n\nВерни строго", 1)[0]
+                .strip()
+            )
+
         return QueryRouterOutput(
             intent="qa",
             regime_hint="MOS_PORTAL",
@@ -67,7 +75,7 @@ class MockLlmClient:
             error_codes=[],
             escalation_requested=False,
             entities=[],
-            standalone_query=prompt.strip(),
+            standalone_query=query_text[:1000],
             sub_queries=[],
         )
 

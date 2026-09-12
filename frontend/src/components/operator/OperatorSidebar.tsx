@@ -98,7 +98,7 @@ export const OperatorSidebar: React.FC<OperatorSidebarProps> = ({
   };
 
   return (
-    <aside className="w-80 flex flex-col bg-white border-r border-[#e5e5e5] h-dvh select-none shrink-0 z-20">
+    <aside className="w-80 flex flex-col bg-white border-r border-[#e5e5e5] h-full select-none shrink-0 z-20">
       {/* Header with Branding & Line */}
       <div className="p-3.5 border-b border-[#e5e5e5] flex items-center justify-between h-14">
         <div className="flex items-center gap-2.5">
