@@ -300,7 +300,7 @@ class AnalyticsService:
     async def _safe_enqueue_audit(
         self, ticket_id: UUID, trigger_reason: str
     ) -> None:
-        """Безопасно ставит задачу audit_ticket_quality в очередь Taskiq."""
+        """Безопасно ставит задачу audit_ticket_quality в очередь Taskiq с синхронным фолбэком."""
         try:
             from src.analytics.tasks import audit_ticket_quality
 
@@ -317,10 +317,25 @@ class AnalyticsService:
             )
         except Exception as exc:
             logger.warning(
-                "Брокер Taskiq недоступен, задача аудита для тикета %s отложена: %s",
-                ticket_id,
+                "Брокер Taskiq недоступен (%s), выполняется синхронный аудит тикета %s (фолбэк)",
                 exc,
+                ticket_id,
             )
+            try:
+                await self.audit_ticket_quality(
+                    ticket_id=ticket_id,
+                    trigger_reason=trigger_reason,
+                )
+                logger.info(
+                    "Синхронный аудит тикета %s успешно выполнен (фолбэк)",
+                    ticket_id,
+                )
+            except Exception as fallback_exc:
+                logger.error(
+                    "Сбой синхронного аудита тикета %s: %s",
+                    ticket_id,
+                    fallback_exc,
+                )
 
     async def get_dashboard(
         self,

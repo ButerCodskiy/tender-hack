@@ -604,6 +604,8 @@ class OperatorService:
         if current_line_code:
             await self._safe_dispatch_task(current_line_code, "slot_freed")
 
+        await self._safe_enqueue_audit(ticket.id, "operator_resolved")
+
         return ResolveTicketResponseSchema(
             status="resolved",
             ticket_id=ticket.id,
@@ -924,7 +926,7 @@ class OperatorService:
     async def _safe_enqueue_audit(
         self, ticket_id: UUID, trigger_reason: str
     ) -> None:
-        """Безопасно ставит задачу audit_ticket_quality в очередь Taskiq."""
+        """Безопасно ставит задачу audit_ticket_quality в очередь Taskiq с синхронным фолбэком."""
         try:
             from src.analytics.tasks import audit_ticket_quality
 
@@ -941,7 +943,27 @@ class OperatorService:
             )
         except Exception as exc:
             logger.warning(
-                "Брокер Taskiq недоступен, задача аудита для тикета %s отложена: %s",
-                ticket_id,
+                "Брокер Taskiq недоступен (%s), запуск синхронного аудита для тикета %s (фолбэк)",
                 exc,
+                ticket_id,
             )
+            try:
+                from src.analytics.service import AnalyticsService
+
+                analytics_service = AnalyticsService(
+                    session=self.session, redis=self.redis
+                )
+                await analytics_service.audit_ticket_quality(
+                    ticket_id=ticket_id,
+                    trigger_reason=trigger_reason,
+                )
+                logger.info(
+                    "Синхронный аудит для тикета %s успешно выполнен (фолбэк)",
+                    ticket_id,
+                )
+            except Exception as fallback_exc:
+                logger.error(
+                    "Сбой синхронного аудита для тикета %s: %s",
+                    ticket_id,
+                    fallback_exc,
+                )
