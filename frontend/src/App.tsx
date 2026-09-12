@@ -689,7 +689,10 @@ export const App: React.FC = () => {
   if (viewMode === 'analytics') {
     return (
       <div className="h-dvh w-full overflow-hidden bg-[#F5F6F8]">
-        <SupervisorDashboard onLogout={handleLogout} />
+        <SupervisorDashboard
+          onLogout={handleLogout}
+          onBackToOperator={() => setViewMode('operator')}
+        />
       </div>
     );
   }
@@ -701,6 +704,11 @@ export const App: React.FC = () => {
           user={user}
           onLogout={handleLogout}
           onSwitchToClientMode={() => setViewMode('client')}
+          onSwitchToAnalyticsMode={
+            user?.role_code === 'supervisor' || user?.role_code === 'admin'
+              ? () => setViewMode('analytics')
+              : undefined
+          }
         />
         {isAuthOpen && (
           <AuthPage

@@ -310,6 +310,7 @@ export function generateMockAuthTokens(user: Partial<UserProfile>): AuthTokens {
     full_name: user.full_name || 'Иванов Иван Иванович',
     company_name: user.company_name || 'ООО «ТехноСнаб Поставка»',
     inn: user.inn || '7701234567',
+    line_code: user.line_code,
     created_at: new Date().toISOString(),
   };
 

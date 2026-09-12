@@ -117,7 +117,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
             }`}
           >
             <Headphones className="size-4 shrink-0 text-white" />
-            {!isCollapsed && <span>АРМ Оператора (L1)</span>}
+            {!isCollapsed && (
+              <span>
+                {user?.line_code ? `АРМ Оператора (${user.line_code})` : 'АРМ Оператора'}
+              </span>
+            )}
           </button>
         )}
       </div>

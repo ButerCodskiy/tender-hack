@@ -26,21 +26,26 @@ interface OperatorWorkspaceProps {
   user: UserProfile | null;
   onLogout: () => void;
   onSwitchToClientMode: () => void;
+  onSwitchToAnalyticsMode?: () => void;
 }
 
 export const OperatorWorkspace: React.FC<OperatorWorkspaceProps> = ({
   user,
   onLogout,
   onSwitchToClientMode,
+  onSwitchToAnalyticsMode,
 }) => {
-  const [profile, setProfile] = useState<OperatorProfile>({
-    user_id: user?.id || 'op-001',
-    full_name: user?.full_name || 'Оператор поддержки',
-    line_id: 1,
-    line_code: 'L1',
-    shift_status: 'active',
-    max_slots: 5,
-    active_slots_count: 0,
+  const [profile, setProfile] = useState<OperatorProfile>(() => {
+    const line = (user?.line_code as 'L1' | 'L2' | 'L3') || 'L1';
+    return {
+      user_id: user?.id || 'op-001',
+      full_name: user?.full_name || 'Оператор поддержки',
+      line_id: line === 'L2' ? 2 : line === 'L3' ? 3 : 1,
+      line_code: line,
+      shift_status: 'active',
+      max_slots: 5,
+      active_slots_count: 0,
+    };
   });
 
   const [tickets, setTickets] = useState<OperatorSidebarTicket[]>([]);
@@ -253,6 +258,7 @@ export const OperatorWorkspace: React.FC<OperatorWorkspaceProps> = ({
         user={user}
         onLogout={onLogout}
         onSwitchToClientMode={onSwitchToClientMode}
+        onSwitchToAnalyticsMode={onSwitchToAnalyticsMode}
       />
 
       {/* Column 2: Central Chat Workspace */}
