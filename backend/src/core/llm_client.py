@@ -45,7 +45,7 @@ class OllamaStreamClient:
             "options": {
                 "temperature": 0.2,
                 "top_p": 0.9,
-                "num_predict": 2000,
+                "num_predict": 600,
             },
         }
 

@@ -79,7 +79,7 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL_NAME: str = "BAAI/bge-m3"
     EMBEDDING_DIM: int = 1024
     EMBEDDING_DEVICE: str = "cpu"
-    ENABLE_LOCAL_NEURAL_EMBEDDINGS: bool = False
+    ENABLE_LOCAL_NEURAL_EMBEDDINGS: bool = True
 
     @property
     def DATABASE_URL(self) -> str:
