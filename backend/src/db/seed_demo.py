@@ -75,9 +75,7 @@ async def seed() -> None:
                 logger.info("Создана роль: %s", code)
             roles[code] = role
 
-        # Создание линий поддержки L1, L2, L3 и general
         lines_data = [
-            ("general", "Общая линия поддержки", "Базовые консультации"),
             (
                 "L1",
                 "Первая линия — регламенты и каталог",
@@ -111,6 +109,36 @@ async def seed() -> None:
                 await session.flush()
                 logger.info("Создана линия поддержки: %s", code)
             lines[code] = line_obj
+
+        # Удаление устаревшей линии general, если она осталась от ранних версий
+        stmt_old_line = select(SupportLineModel).where(
+            SupportLineModel.code == "general"
+        )
+        old_general_line = (await session.scalars(stmt_old_line)).first()
+        if old_general_line:
+            # Перепривязываем операторов и тикеты с general на L1
+            stmt_update_profiles = (
+                select(OperatorProfileModel).where(
+                    OperatorProfileModel.line_id == old_general_line.id
+                )
+            )
+            profiles_to_reassign = (await session.scalars(stmt_update_profiles)).all()
+            for p in profiles_to_reassign:
+                p.line_id = lines["L1"].id
+
+            stmt_update_tickets = (
+                select(TicketModel).where(
+                    TicketModel.line_id == old_general_line.id
+                )
+            )
+            tickets_to_reassign = (await session.scalars(stmt_update_tickets)).all()
+            for t in tickets_to_reassign:
+                t.line_id = lines["L1"].id
+
+            await session.flush()
+            await session.delete(old_general_line)
+            await session.flush()
+            logger.info("Устаревшая линия general удалена, связанные профили переведены на L1")
 
         # Сидирование демонстрационных пользователей (пароль: password123)
         default_pwd_hash = hash_password("password123")
@@ -153,29 +181,62 @@ async def seed() -> None:
                 session.add(chat)
                 await session.flush()
 
-        # Оператор L1
-        operator_email = "operator1@example.com"
-        stmt_op = select(UserModel).where(UserModel.email == operator_email)
-        operator = (await session.scalars(stmt_op)).first()
-        if not operator:
-            operator = UserModel(
-                role_id=roles[UserRole.OPERATOR].id,
-                email=operator_email,
-                password_hash=default_pwd_hash,
-                full_name="Смирнова Анна Сергеевна",
-                is_active=True,
-            )
-            session.add(operator)
-            await session.flush()
+        # Операторы по линиям
+        operators_data = [
+            (
+                "operator1@example.com",
+                "Смирнова Анна Сергеевна",
+                "L1",
+                5,
+            ),
+            (
+                "operator2@example.com",
+                "Кузнецов Петр Васильевич",
+                "L2",
+                5,
+            ),
+            (
+                "operator3@example.com",
+                "Соколова Елена Дмитриевна",
+                "L3",
+                5,
+            ),
+        ]
 
-            op_profile = OperatorProfileModel(
-                user_id=operator.id,
-                line_id=lines["L1"].id,
-                shift_status=OperatorShiftStatus.ACTIVE,
-                max_slots=5,
-            )
-            session.add(op_profile)
-            logger.info("Создан тестовый оператор: %s", operator_email)
+        operator: UserModel | None = None
+        for op_email, op_name, line_code, slots in operators_data:
+            stmt_op = select(UserModel).where(UserModel.email == op_email)
+            op_user = (await session.scalars(stmt_op)).first()
+            if not op_user:
+                op_user = UserModel(
+                    role_id=roles[UserRole.OPERATOR].id,
+                    email=op_email,
+                    password_hash=default_pwd_hash,
+                    full_name=op_name,
+                    is_active=True,
+                )
+                session.add(op_user)
+                await session.flush()
+
+                op_profile = OperatorProfileModel(
+                    user_id=op_user.id,
+                    line_id=lines[line_code].id,
+                    shift_status=OperatorShiftStatus.ACTIVE,
+                    max_slots=slots,
+                )
+                session.add(op_profile)
+                logger.info("Создан тестовый оператор %s (%s): %s", line_code, op_name, op_email)
+            else:
+                stmt_prof = select(OperatorProfileModel).where(
+                    OperatorProfileModel.user_id == op_user.id
+                )
+                op_profile = (await session.scalars(stmt_prof)).first()
+                if op_profile:
+                    op_profile.line_id = lines[line_code].id
+                    op_profile.shift_status = OperatorShiftStatus.ACTIVE
+
+            if op_email == "operator1@example.com":
+                operator = op_user
 
         # Руководитель (супервизор)
         admin_email = "admin@example.com"
@@ -194,12 +255,20 @@ async def seed() -> None:
 
             admin_profile = OperatorProfileModel(
                 user_id=admin_user.id,
-                line_id=lines["L2"].id,
+                line_id=lines["L1"].id,
                 shift_status=OperatorShiftStatus.ACTIVE,
                 max_slots=10,
             )
             session.add(admin_profile)
             logger.info("Создан тестовый супервизор: %s", admin_email)
+        else:
+            stmt_adm_prof = select(OperatorProfileModel).where(
+                OperatorProfileModel.user_id == admin_user.id
+            )
+            admin_profile = (await session.scalars(stmt_adm_prof)).first()
+            if admin_profile:
+                admin_profile.line_id = lines["L1"].id
+                admin_profile.shift_status = OperatorShiftStatus.ACTIVE
 
         # Сидирование 30 демонстрационных обращений поставщиков по методичкам
         stmt_t_count = select(func.count(TicketModel.id)).where(
