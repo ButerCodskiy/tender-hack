@@ -46,10 +46,10 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
       }`}
     >
       <div
-        className={`relative flex flex-col bg-white rounded-3xl transition-all duration-200 border ${
+        className={`relative flex flex-col bg-white rounded-none transition-all duration-150 border ${
           isFocused
-            ? 'border-primary-500 shadow-lg shadow-primary-500/10'
-            : 'border-gray-200 shadow-[0_12px_24px_-8px_rgba(0,0,0,0.06)] hover:border-gray-300'
+            ? 'border-[#264b82] ring-1 ring-[#264b82]'
+            : 'border-[#d4d4d5] hover:border-[#264b82]'
         }`}
       >
         {/* Text Area Input */}
@@ -62,17 +62,17 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           onKeyDown={handleKeyDown}
-          placeholder="Задайте вопрос по закупкам, регламентам, офертам..."
-          className="w-full resize-none bg-transparent px-5 pt-4 pb-2 text-base text-title-50 placeholder:text-gray-400 focus:outline-none custom-scrollbar leading-relaxed"
+          placeholder="Задайте вопрос по регламенту, офертам, закупкам..."
+          className="w-full resize-none bg-transparent px-4 pt-3.5 pb-2 text-[14px] text-[#1a1a1a] placeholder:text-[#7f8792] focus:outline-none custom-scrollbar leading-relaxed"
         />
 
         {/* Action Toolbar */}
-        <div className="flex items-center justify-between px-3 pb-3 pt-1 border-t border-gray-50/80">
+        <div className="flex items-center justify-between px-3 pb-2.5 pt-1.5 border-t border-[#e5e5e5] bg-[#fafafa]">
           <div className="flex items-center gap-1">
             {/* Attachment Button */}
             <label
               title="Прикрепить регламент или файл"
-              className="size-8 rounded-full flex items-center justify-center text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition cursor-pointer"
+              className="size-8 rounded-none flex items-center justify-center text-[#7f8792] hover:text-[#1a1a1a] hover:bg-[#f2f7fc] transition cursor-pointer"
             >
               <Paperclip className="size-4" />
               <input type="file" className="hidden" />
@@ -80,19 +80,19 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Send Message Button */}
+            {/* Send Message Button: Mos Red CTA */}
             <button
               type="button"
               disabled={!inputValue.trim() || isSending}
               onClick={onSend}
               aria-label="Отправить сообщение"
-              className={`size-9 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+              className={`size-8 rounded-none flex items-center justify-center transition-colors cursor-pointer ${
                 inputValue.trim() && !isSending
-                  ? 'bg-primary-500 text-white shadow-sm shadow-primary-500/30 hover:bg-primary-600 active:scale-95'
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                  ? 'bg-[#db2b21] hover:bg-[#cd1f15] active:bg-[#af221a] text-white'
+                  : 'bg-[#eeeeee] text-[#9ba1a9] cursor-not-allowed'
               }`}
             >
-              <ArrowUp className="size-5" />
+              <ArrowUp className="size-4.5" />
             </button>
           </div>
         </div>
