@@ -14,6 +14,7 @@ x-backend-base: &backend-base
   volumes:
     - ./backend/src:/app/src
     - ./backend/alembic:/app/alembic
+    - ./artifacts_export:/app/artifacts_export:ro
     - kb_documents_data:/data/kb_documents
   depends_on:
     postgres:
