@@ -6,24 +6,30 @@ from typing import Any, ClassVar, Protocol, runtime_checkable
 
 from src.analytics.models import IncidentType, RootCauseType
 from src.analytics.schemas import AuditLlmOutputSchema
+from src.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 AUDIT_SYSTEM_PROMPT = (
     "Ты — беспристрастный экспертный арбитр и аудитор качества диалогов службы поддержки "
     "Портала поставщиков Москвы (ЕАИСТ) и госзакупок по 44-ФЗ и 223-ФЗ.\n\n"
-    "Твоя задача — объективно оценить завершенный диалог между клиентом и поддержкой:\n"
-    "1. politeness_score (1-5): вежливость, культура речи, корректность тона;\n"
-    "2. completeness_score (1-5): полнота, точность консультации и следование регламентам;\n"
-    "3. root_cause: первопричина проблемы или негатива:\n"
-    "   - 'operator_error': некомпетентность, грубость, неверные инструкции или игнорирование;\n"
-    "   - 'system_issue': технический сбой портала, плагина ЭЦП, КриптоПро, СМЭВ, ошибка 0x, недоступность страниц;\n"
-    "   - 'regulation_dissatisfaction': несогласие клиента с 44-ФЗ/223-ФЗ, отклонением заявки или сроками при корректном ответе оператора;\n"
-    "   - 'none': обращение решено корректно, претензий нет.\n"
-    "4. summary: краткое (1-3 предложения) аргументированное заключение аудита;\n"
-    "5. is_system_issue: true, если выявлен сбой платформы (для снятия вины с сотрудника);\n"
-    "6. incident_type: 'portal_downtime', 'crypto_plugin' или 'api_error' при наличии системного сбоя.\n\n"
-    "Ответ должен быть строго валидным объектом AuditLlmOutputSchema."
+    "Твоя задача — объективно оценить завершенный диалог между клиентом и поддержкой и вернуть строго валидный JSON:\n"
+    "{\n"
+    '  "politeness_score": 5,\n'
+    '  "completeness_score": 5,\n'
+    '  "root_cause": "none",\n'
+    '  "summary": "Краткое заключение аудита (1-2 предложения)",\n'
+    '  "is_system_issue": false,\n'
+    '  "incident_type": null,\n'
+    '  "incident_description": null\n'
+    "}\n\n"
+    "Критерии оценки:\n"
+    "- politeness_score (1-5): вежливость, культура речи, корректность тона;\n"
+    "- completeness_score (1-5): полнота, точность консультации и следование регламентам;\n"
+    "- root_cause: 'operator_error' (вина сотрудника), 'system_issue' (технический сбой платформы, ЭЦП, КриптоПро), "
+    "'regulation_dissatisfaction' (недовольство нормами 44/223-ФЗ при верном ответе), 'none' (претензий нет);\n"
+    "- is_system_issue: true, если выявлен сбой платформы (для снятия вины с сотрудника);\n"
+    "- incident_type: 'portal_downtime', 'crypto_plugin' или 'api_error' при наличии системного сбоя."
 )
 
 
@@ -236,3 +242,106 @@ class MockAuditLlmClient:
             incident_type=None,
             incident_description=None,
         )
+
+
+class OllamaAuditLlmClient:
+    """Боевой оценщик качества диалогов через Ollama со страховочным резервом."""
+
+    def __init__(
+        self,
+        llm_client: Any | None = None,
+        fallback_client: AuditLlmClientProtocol | None = None,
+    ) -> None:
+        """Инициализирует клиент инференса Ollama и резервную заглушку."""
+        from src.core.llm_client import get_llm_stream_client
+
+        self.llm_client = llm_client or get_llm_stream_client()
+        self.fallback_client = fallback_client or MockAuditLlmClient()
+
+    @staticmethod
+    def _normalize_score(value: Any, default: int = 4) -> int:
+        """Нормализует оценку в допустимый диапазон [1..5]."""
+        try:
+            score = round(float(value))
+            return max(1, min(5, score))
+        except (ValueError, TypeError):
+            return default
+
+    @staticmethod
+    def _normalize_root_cause(value: Any) -> RootCauseType:
+        """Приводит значение root_cause к валидному RootCauseType."""
+        val_str = str(value or "").strip().lower()
+        for member in RootCauseType:
+            if val_str == member.value:
+                return member
+        return RootCauseType.NONE
+
+    @staticmethod
+    def _normalize_incident_type(value: Any) -> IncidentType | None:
+        """Приводит значение incident_type к валидному IncidentType."""
+        val_str = str(value or "").strip().lower()
+        for member in IncidentType:
+            if val_str == member.value:
+                return member
+        return None
+
+    async def evaluate_dialog(
+        self,
+        prompt: str,
+        system_prompt: str = AUDIT_SYSTEM_PROMPT,
+        timeout: float | None = None,
+    ) -> AuditLlmOutputSchema:
+        """Оценивает диалог через Ollama с мягкой нормализацией и автопереходом на заглушку."""
+        request_timeout = timeout or settings.OLLAMA_TIMEOUT_SECONDS
+        try:
+            raw_dict = await self.llm_client.generate_json(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                timeout=request_timeout,
+            )
+
+            politeness = self._normalize_score(
+                raw_dict.get("politeness_score"), default=4
+            )
+            completeness = self._normalize_score(
+                raw_dict.get("completeness_score"), default=4
+            )
+            root_cause = self._normalize_root_cause(raw_dict.get("root_cause"))
+
+            is_system_issue = bool(
+                raw_dict.get("is_system_issue")
+                or root_cause == RootCauseType.SYSTEM_ISSUE
+            )
+            incident_type = self._normalize_incident_type(
+                raw_dict.get("incident_type")
+            )
+            if is_system_issue and incident_type is None:
+                incident_type = IncidentType.PORTAL_DOWNTIME
+
+            summary = str(raw_dict.get("summary") or "").strip()
+            if not summary:
+                summary = "Аудит завершен успешно. Диалог соответствует регламенту поддержки."
+
+            incident_desc = raw_dict.get("incident_description")
+            if incident_desc is not None:
+                incident_desc = str(incident_desc).strip() or None
+
+            return AuditLlmOutputSchema(
+                politeness_score=politeness,
+                completeness_score=completeness,
+                root_cause=root_cause,
+                summary=summary,
+                is_system_issue=is_system_issue,
+                incident_type=incident_type,
+                incident_description=incident_desc,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Сбой вызова Ollama при аудите диалога (%s). Активирован страховочный резерв (MockAuditLlmClient)",
+                exc,
+            )
+            return await self.fallback_client.evaluate_dialog(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                timeout=timeout,
+            )

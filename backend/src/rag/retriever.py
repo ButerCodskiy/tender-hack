@@ -30,7 +30,7 @@ class Retriever:
         self.qdrant_client = qdrant_client or get_qdrant_client()
 
     def _encode_query(self, query: str) -> list[float]:
-        """Генерирует плотный вектор через BAAI/bge-m3 на GPU (Ollama/CUDA) с фолбэком на стаб."""
+        """Генерирует плотный вектор через BAAI/bge-m3 на AMD GPU (Ollama) с фолбэком на embedding_model."""
         try:
             import json
             import urllib.request
@@ -42,50 +42,14 @@ class Retriever:
                 ),
                 headers={"Content-Type": "application/json"},
             )
-            with urllib.request.urlopen(req, timeout=15.0) as resp:
+            with urllib.request.urlopen(req, timeout=10.0) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 if "embedding" in data and len(data["embedding"]) == 1024:
                     return data["embedding"]
         except Exception as ollama_exc:
             logger.debug("Ollama bge-m3 embeddings fallback: %s", ollama_exc)
 
-        if not getattr(settings, "ENABLE_LOCAL_NEURAL_EMBEDDINGS", False):
-            return self.embedding_model.generate_vectors(query)["dense"]
-
-        try:
-            import torch
-            import torch.nn.functional as F
-            from transformers import AutoModel, AutoTokenizer
-
-            if getattr(self, "_bge_model", None) is None:
-                device = "cuda" if torch.cuda.is_available() else "cpu"
-                self._bge_tokenizer = AutoTokenizer.from_pretrained(
-                    "BAAI/bge-m3"
-                )
-                self._bge_model = AutoModel.from_pretrained("BAAI/bge-m3").to(
-                    device
-                )
-                self._bge_model.eval()
-                self._bge_device = device
-
-            inputs = self._bge_tokenizer(
-                [query],
-                padding=True,
-                truncation=True,
-                max_length=8192,
-                return_tensors="pt",
-            ).to(self._bge_device)
-            with torch.no_grad():
-                outputs = self._bge_model(**inputs)
-                norm_emb = F.normalize(
-                    outputs.last_hidden_state[:, 0], p=2, dim=-1
-                )
-                return norm_emb[0].cpu().tolist()
-        except Exception as exc:
-            logger.debug(
-                f"BAAI/bge-m3 недоступен, фолбэк на embedding_model: {exc}"
-            )
-            return self.embedding_model.generate_vectors(query)["dense"]
+        return self.embedding_model.generate_dense_vector(query)
 
     async def retrieve(
         self,
@@ -93,7 +57,7 @@ class Retriever:
     ) -> list[RagSourceChunkSchema]:
         """Поиск наиболее релевантных дочерних чанков в Qdrant и гидратация полных родительских узлов из PostgreSQL."""
         dense = self._encode_query(query)
-        sparse = self.embedding_model.generate_vectors(query).get("sparse")
+        sparse = self.embedding_model.generate_sparse_vector(query)
 
         collection = settings.QDRANT_COLLECTION_NAME
         response = None

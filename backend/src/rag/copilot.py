@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Any, ClassVar, Protocol, runtime_checkable
+from typing import Any, ClassVar, Literal, Protocol, runtime_checkable
 from uuid import UUID
 
 from qdrant_client import AsyncQdrantClient
@@ -20,14 +20,14 @@ logger = logging.getLogger(__name__)
 COPILOT_SYSTEM_PROMPT = (
     "Ты — экспертный аналитический ассистент AI Copilot для операторов службы поддержки "
     "Портала поставщиков Москвы (ЕАИСТ) и госзакупок по 44-ФЗ и 223-ФЗ.\n\n"
-    "Твоя задача — проанализировать историю диалога клиента и подготовить:\n"
-    "1. summary: краткую суть проблемы (1-2 предложения, строго факты без лишних слов);\n"
-    "2. suggested_line_code: рекомендованную линию поддержки (L1 - регламенты и навигация, "
-    "L2 - ошибки ЭЦП, КриптоПро и технические сбои, L3 - претензии, ФАС, блокировки и споры);\n"
-    "3. suggested_response: вежливый, профессиональный готовый черновик ответа для оператора "
-    "с четкими инструкциями по шагам;\n"
-    "4. recommended_chunk_ids: идентификаторы нормативных статей из базы знаний.\n\n"
-    "Ответ должен быть строго валидным объектом CopilotLlmOutputSchema."
+    "Твоя задача — проанализировать историю диалога клиента и вернуть строго валидный JSON:\n"
+    "{\n"
+    '  "summary": "Краткая суть проблемы клиента (1-2 предложения, строго факты)",\n'
+    '  "suggested_line_code": "L1", // одно из: "L1" (регламенты), "L2" (сбои ЭЦП/КриптоПро), "L3" (ФАС/споры/блокировки)\n'
+    '  "suggested_response": "Готовый вежливый черновик ответа для оператора с пошаговой инструкцией",\n'
+    '  "recommended_chunk_ids": [] // список ID статей регламентов или пустой список\n'
+    "}\n\n"
+    "Соблюдай деловой тон и точность ссылок на процедуры госзакупок."
 )
 
 
@@ -155,16 +155,108 @@ class MockCopilotLlmClient:
         )
 
 
+class OllamaCopilotLlmClient:
+    """Боевой клиент генерации подсказок Copilot через Ollama со страховочным резервом."""
+
+    DEFAULT_TIMEOUT: float = 4.0
+
+    def __init__(
+        self,
+        llm_client: Any | None = None,
+        fallback_client: CopilotLlmClientProtocol | None = None,
+        timeout: float = 4.0,
+    ) -> None:
+        """Инициализирует клиент инференса Ollama и резервную заглушку."""
+        from src.core.llm_client import get_llm_stream_client
+
+        self.llm_client = llm_client or get_llm_stream_client()
+        self.fallback_client = fallback_client or MockCopilotLlmClient()
+        self.timeout = timeout
+
+    @staticmethod
+    def _normalize_line_code(value: Any) -> Literal["L1", "L2", "L3"]:
+        """Приводит код линии поддержки к допустимому значению L1/L2/L3."""
+        val_str = str(value or "").strip().upper()
+        if val_str in ("L1", "L2", "L3"):
+            return val_str  # type: ignore[return-value]
+        if "2" in val_str:
+            return "L2"
+        if "3" in val_str:
+            return "L3"
+        return "L1"
+
+    async def generate_copilot_summary(
+        self,
+        prompt: str,
+        system_prompt: str = COPILOT_SYSTEM_PROMPT,
+        timeout: float | None = None,
+    ) -> CopilotLlmOutputSchema:
+        """Генерирует сводку диалога и черновик через Ollama с автопереходом на заглушку."""
+        request_timeout = timeout if timeout is not None else self.timeout
+        try:
+            raw_dict = await self.llm_client.generate_json(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                timeout=request_timeout,
+            )
+
+            summary = str(raw_dict.get("summary") or "").strip()
+            if not summary:
+                summary = "Клиент обратился за консультацией по работе на Портале поставщиков."
+
+            line_code = self._normalize_line_code(
+                raw_dict.get("suggested_line_code")
+            )
+
+            suggested_response = str(
+                raw_dict.get("suggested_response") or ""
+            ).strip()
+            if not suggested_response:
+                suggested_response = (
+                    "Здравствуйте! По вашему вопросу рекомендуем проверить данные в личном кабинете "
+                    "и следовать установленным регламентам Портала поставщиков."
+                )
+
+            chunk_ids_raw = raw_dict.get("recommended_chunk_ids")
+            recommended_chunk_ids: list[str] = []
+            if isinstance(chunk_ids_raw, list):
+                recommended_chunk_ids = [
+                    str(item) for item in chunk_ids_raw if item
+                ]
+
+            return CopilotLlmOutputSchema(
+                summary=summary,
+                suggested_line_code=line_code,
+                suggested_response=suggested_response,
+                recommended_chunk_ids=recommended_chunk_ids,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Сбой вызова Ollama при генерации подсказки Copilot (%s). Активирован страховочный резерв",
+                exc,
+            )
+            return await self.fallback_client.generate_copilot_summary(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                timeout=request_timeout,
+            )
+
+
 class CopilotService:
     """Сервис формирования аналитической подсказки оператора и подбора прецедентов."""
+
+    DEFAULT_TIMEOUT: float = 4.0
 
     def __init__(
         self,
         llm_client: CopilotLlmClientProtocol | None = None,
         qdrant_client: AsyncQdrantClient | None = None,
+        timeout: float = 4.0,
     ) -> None:
         """Инициализирует сервис клиентом LLM и клиентом Qdrant."""
-        self.llm_client = llm_client or MockCopilotLlmClient()
+        self.timeout = timeout
+        self.fallback_client = MockCopilotLlmClient()
+        self.llm_client = llm_client or OllamaCopilotLlmClient(timeout=timeout)
         self.qdrant_client = qdrant_client
 
     def _format_conversation(self, messages: list[dict[str, Any]]) -> str:
@@ -219,17 +311,32 @@ class CopilotService:
                 limit=3,
             )
 
-        # 2. Генерация аналитической выжимки через LLM
+        # 2. Генерация аналитической выжимки через LLM с таймаутом до 4.0с
         prompt = (
             f"ИСТОРИЯ ОБРАЩЕНИЯ (ТИКЕТ {ticket_id}):\n"
             f"{conversation_context}\n\n"
             "Сформируй краткую суть, выбери линию поддержки и составь черновик ответа."
         )
 
-        llm_output = await self.llm_client.generate_copilot_summary(
-            prompt=prompt,
-            system_prompt=COPILOT_SYSTEM_PROMPT,
-        )
+        try:
+            llm_output = await asyncio.wait_for(
+                self.llm_client.generate_copilot_summary(
+                    prompt=prompt,
+                    system_prompt=COPILOT_SYSTEM_PROMPT,
+                    timeout=self.timeout,
+                ),
+                timeout=self.timeout,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Copilot LLM execution error/timeout: %s. Using heuristic fallback.",
+                exc,
+            )
+            llm_output = await self.fallback_client.generate_copilot_summary(
+                prompt=prompt,
+                system_prompt=COPILOT_SYSTEM_PROMPT,
+                timeout=self.timeout,
+            )
 
         # 3. Агрегация в публичную контрактную схему
         return CopilotSummaryResponseSchema(

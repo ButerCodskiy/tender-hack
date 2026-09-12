@@ -86,6 +86,10 @@ class RagSourceChunkSchema(BaseModel):
         description="Оценка релевантности фрагмента поисковым реранкером",
         examples=[0.94],
     )
+    pin_to_top: bool = Field(
+        default=False,
+        description="Флаг приоритетного закрепления нормативной статьи в топ-1 выдачи",
+    )
 
     @property
     def score(self) -> float:

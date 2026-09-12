@@ -356,7 +356,70 @@ class ChatService:
         await self.ticket_repo.update(active_ticket)
         await self.session.commit()
 
-        # 4. Перехват non-RAG намерений (chitchat и out_of_domain)
+        # 4. Перехват non-RAG намерений (escalation_requested, chitchat, out_of_domain)
+        if route_output.escalation_requested:
+            escalation_text = (
+                "Переключаю диалог на специалиста службы поддержки. "
+                "Пожалуйста, оставайтесь на связи, первый освободившийся оператор сейчас подключится к чату."
+            )
+            bot_message_id = uuid6.uuid7()
+            bot_message = MessageModel(
+                id=bot_message_id,
+                ticket_id=active_ticket.id,
+                sender_type=MessageSenderType.BOT,
+                sender_id=None,
+                text=escalation_text,
+                moderation_status=MessageModerationStatus.PASSED,
+                created_at=datetime.now(settings.TIMEZONE),
+            )
+            await self.repo.save_message(bot_message)
+
+            active_ticket.status = TicketStatus.QUEUED.value
+            active_ticket.escalation_reason = "client_requested"
+            active_ticket.opened_at = datetime.now(settings.TIMEZONE)
+            await self.ticket_repo.update(active_ticket)
+            await self.session.commit()
+
+            line_code = "L1"
+            if active_ticket.line:
+                line_code = active_ticket.line.code
+            elif route_output.support_line:
+                line_code = route_output.support_line
+
+            if self.line_queue is not None:
+                await self.line_queue.enqueue_ticket(
+                    line_code=line_code,
+                    ticket_id=active_ticket.id,
+                    priority=active_ticket.priority,
+                )
+
+            await self._safe_dispatch_task(line_code, "ticket_escalated")
+            await self._safe_copilot_task(active_ticket.id)
+
+            if self.redis_context:
+                await self.redis_context.add_message(
+                    ticket_id=active_ticket.id,
+                    sender=MessageSenderType.BOT.value,
+                    text=escalation_text,
+                    timestamp=bot_message.created_at,
+                )
+
+            sent_event = RagSentenceEventSchema(
+                sentence_idx=0,
+                text=escalation_text,
+                verified=True,
+            )
+            yield f"event: {sent_event.event}\ndata: {sent_event.model_dump_json(exclude={'event'})}\n\n"
+
+            done_event = RagDoneEventSchema(
+                message_id=bot_message_id,
+                text=escalation_text,
+                all_verified=True,
+                ticket_id=active_ticket.id,
+            )
+            yield f"event: {done_event.event}\ndata: {done_event.model_dump_json(exclude={'event'})}\n\n"
+            return
+
         if route_output.intent == "chitchat":
             chitchat_text = (
                 "Здравствуйте! Я виртуальный ассистент службы поддержки Портала поставщиков Москвы. "
@@ -372,6 +435,7 @@ class ChatService:
                 moderation_status=MessageModerationStatus.PASSED,
                 created_at=datetime.now(settings.TIMEZONE),
             )
+
             await self.repo.save_message(bot_message)
             await self.session.commit()
 
@@ -443,9 +507,15 @@ class ChatService:
             return
 
         # 5. Полноценный запуск RAG с контекстом диалога
+        effective_query = (
+            route_output.standalone_query.strip()
+            if getattr(route_output, "standalone_query", None)
+            and route_output.standalone_query.strip()
+            else payload.text
+        )
         bot_message_id = uuid6.uuid7()
         rag_request = RagQueryRequestSchema(
-            query=payload.text,
+            query=effective_query,
             message_id=bot_message_id,
             conversation_history=conversation_history,
         )
