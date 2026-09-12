@@ -96,7 +96,7 @@ async def seed_test_regulation(
 
     # 4. Сохранение в PostgreSQL через топологический репозиторий (идемпотентно)
     existing_doc = await repo.get_document_by_id(doc_id)
-    if not existing_doc:
+    if existing_doc is None:
         await repo.save_full_document_tree(
             document=document,
             nodes=nodes,
@@ -107,7 +107,7 @@ async def seed_test_regulation(
         )
     else:
         logger.info(
-            "Документ %s уже существует в PostgreSQL, вставка пропущена",
+            "Документ %s уже существует в PostgreSQL, пропускаем сохранение дерева",
             doc_id,
         )
 

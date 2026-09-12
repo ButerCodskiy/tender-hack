@@ -231,6 +231,32 @@ export async function streamChatMessage(
                   const text = data.text || accumulatedText;
                   callbacks.onDone?.(text, data.message_id, data.ticket_id);
                   return;
+                } else if (currentEvent === 'degraded_mode') {
+                  if (data.sources && Array.isArray(data.sources)) {
+                    const citations: Citation[] = data.sources.map(
+                      (
+                        src: {
+                          chunk_id?: string;
+                          doc_id?: string;
+                          title?: string;
+                          section_path?: string;
+                          quote_text?: string;
+                        },
+                        idx: number
+                      ) => ({
+                        id: src.chunk_id || `src-${idx}`,
+                        title: src.title || src.doc_id || 'Регламент Портала',
+                        sectionPath: src.section_path || src.doc_id,
+                        excerpt: src.quote_text,
+                      })
+                    );
+                    callbacks.onSources?.(citations);
+                  }
+                  const text =
+                    data.message ||
+                    'Информация по вашему запросу не найдена в нормативных регламентах.';
+                  callbacks.onDone?.(text, data.message_id, data.ticket_id);
+                  return;
                 } else if (currentEvent === 'session_terminated') {
                   callbacks.onSessionTerminated?.(
                     data.reason || 'moderation',

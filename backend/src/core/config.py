@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     QDRANT_HOST: str = "localhost"
     QDRANT_PORT: int = 6333
     QDRANT_GRPC_PORT: int = 6334
-    QDRANT_COLLECTION_NAME: str = "knowledge_base"
+    QDRANT_COLLECTION_NAME: str = "tender_chunks"
 
     # CORS
     CORS_ORIGINS: list[str] = [
@@ -77,6 +77,7 @@ class Settings(BaseSettings):
 
     # Эмбеддинги (bge-m3 1024D)
     EMBEDDING_MODEL_NAME: str = "BAAI/bge-m3"
+    EMBEDDING_DIM: int = 1024
     EMBEDDING_DEVICE: str = "cpu"
     ENABLE_LOCAL_NEURAL_EMBEDDINGS: bool = False
 

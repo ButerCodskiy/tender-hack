@@ -87,6 +87,18 @@ class RagSourceChunkSchema(BaseModel):
         examples=[0.94],
     )
 
+    @property
+    def score(self) -> float:
+        """Псевдоним для relevance_score."""
+        return (
+            self.relevance_score if self.relevance_score is not None else 0.0
+        )
+
+    @property
+    def text(self) -> str:
+        """Псевдоним для quote_text."""
+        return self.quote_text or ""
+
 
 # Изолированный интерфейс фрагмента контекста для генератора (HIGH-01 <-> HIGH-03)
 ContextChunk = RagSourceChunkSchema
@@ -224,6 +236,14 @@ class RagDegradedModeEventSchema(BaseModel):
     sources: list[RagSourceChunkSchema] = Field(
         default_factory=list,
         description="Список найденных первоисточников для ручного изучения",
+    )
+    ticket_id: UUID | None = Field(
+        default=None,
+        description="Идентификатор связанного обращения",
+    )
+    message_id: UUID | None = Field(
+        default=None,
+        description="Идентификатор сообщения бота",
     )
 
 

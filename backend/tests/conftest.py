@@ -61,6 +61,11 @@ except Exception as e:
 from sqlalchemy import select  # noqa: E402
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession  # noqa: E402
 
+import src.analytics.models  # noqa: E402
+import src.auth.models  # noqa: E402
+import src.chat.models  # noqa: E402
+import src.kb.models  # noqa: E402
+import src.operators.models  # noqa: F401, E402
 from src.auth.models import RoleModel, UserRole  # noqa: E402
 from src.core.config import settings  # noqa: E402
 from src.db.database import Base, engine  # noqa: E402
@@ -82,31 +87,26 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
 
 
 @pytest.fixture(scope="session")
-def postgres_container() -> Generator[PostgresContainer, None, None]:
+def postgres_container() -> Generator[PostgresContainer | None, None, None]:
     """Предоставляет инстанс контейнера PostgreSQL на время сессии."""
-    if _pg_container is None:
-        pytest.skip(
-            "Docker / Testcontainers PostgreSQL недоступен в текущем окружении"
-        )
     yield _pg_container
 
 
 @pytest.fixture(scope="session")
-def redis_container() -> Generator[RedisContainer, None, None]:
+def redis_container() -> Generator[RedisContainer | None, None, None]:
     """Предоставляет инстанс контейнера Redis на время сессии."""
-    if _redis_container is None:
-        pytest.skip(
-            "Docker / Testcontainers Redis недоступен в текущем окружении"
-        )
     yield _redis_container
 
 
 @pytest.fixture(scope="session")
 async def async_engine(
-    postgres_container: PostgresContainer,
-) -> AsyncGenerator[AsyncEngine, None]:
+    postgres_container: PostgresContainer | None,
+) -> AsyncGenerator[AsyncEngine | None, None]:
     """Предоставляет сессионный асинхронный движок, привязанный к Testcontainers."""
-    yield engine
+    if _pg_container is None:
+        yield None
+    else:
+        yield engine
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -114,6 +114,10 @@ async def init_test_db(
     async_engine: AsyncEngine,
 ) -> AsyncGenerator[None, None]:
     """Создает таблицы и наполняет базу демонстрационными данными один раз на сессию."""
+    if _pg_container is None:
+        yield
+        return
+
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
@@ -131,9 +135,11 @@ async def init_test_db(
 
 @pytest.fixture(scope="function")
 async def async_session(
-    async_engine: AsyncEngine,
+    async_engine: AsyncEngine | None,
 ) -> AsyncGenerator[AsyncSession, None]:
     """Создает изолированную сессию базы данных для теста с откатом через savepoint."""
+    if async_engine is None:
+        pytest.skip("Docker / Testcontainers PostgreSQL недоступен")
     connection = await async_engine.connect()
     transaction = await connection.begin()
 

@@ -201,6 +201,12 @@ class FactCheckingGuard:
         return sentence_numbers.issubset(valid_pool)
 
 
+UNVERIFIED_FACTS_DISCLAIMER = (
+    "[Данные о сроках, суммах или статьях не подтверждены регламентом Портала и скрыты. "
+    "Пожалуйста, обратитесь к оператору]"
+)
+
+
 class RagStreamGenerator:
     """Генератор потоковых ответов с нарезкой на предложения и факт-чекингом."""
 
@@ -260,12 +266,19 @@ class RagStreamGenerator:
                     verified = self.guard.verify_sentence(
                         sentence, chunks, query_numbers
                     )
+                    text_to_emit = sentence
                     if not verified:
                         all_verified = False
-                    full_text_parts.append(sentence)
+                        logger.warning(
+                            "FactCheckingGuard: недостоверные факты в предложении '%s', скрываем текст.",
+                            sentence,
+                        )
+                        text_to_emit = UNVERIFIED_FACTS_DISCLAIMER
+
+                    full_text_parts.append(text_to_emit)
                     yield RagSentenceEventSchema(
                         sentence_idx=sentence_idx,
-                        text=sentence,
+                        text=text_to_emit,
                         verified=verified,
                     )
                     sentence_idx += 1
@@ -276,12 +289,19 @@ class RagStreamGenerator:
                 verified = self.guard.verify_sentence(
                     sentence, chunks, query_numbers
                 )
+                text_to_emit = sentence
                 if not verified:
                     all_verified = False
-                full_text_parts.append(sentence)
+                    logger.warning(
+                        "FactCheckingGuard: недостоверные факты в предложении '%s', скрываем текст.",
+                        sentence,
+                    )
+                    text_to_emit = UNVERIFIED_FACTS_DISCLAIMER
+
+                full_text_parts.append(text_to_emit)
                 yield RagSentenceEventSchema(
                     sentence_idx=sentence_idx,
-                    text=sentence,
+                    text=text_to_emit,
                     verified=verified,
                 )
                 sentence_idx += 1

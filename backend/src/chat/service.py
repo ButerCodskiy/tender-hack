@@ -6,6 +6,7 @@ from uuid import UUID
 
 import uuid6
 from fastapi import HTTPException, Request, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.models import UserModel
@@ -39,10 +40,13 @@ from src.core.redis_client import (
     RedisLineQueue,
     RedisTicketEvents,
 )
+from src.operators.models import SupportLineModel
+from src.rag.router import QueryRouter
 from src.rag.schemas import (
     RagDegradedModeEventSchema,
     RagDoneEventSchema,
     RagQueryRequestSchema,
+    RagSentenceEventSchema,
     RagSourceChunkSchema,
     RagSourcesEventSchema,
 )
@@ -64,6 +68,7 @@ class ChatService:
         moderator: ProfanityModerator | None = None,
         ticket_events: RedisTicketEvents | None = None,
         line_queue: RedisLineQueue | None = None,
+        query_router: QueryRouter | None = None,
     ) -> None:
         """Инициализирует сервис диалогов репозиториями, сессией БД, поисковым ядром и Redis."""
         self.repo = repo
@@ -74,6 +79,7 @@ class ChatService:
         self.moderator = moderator or get_moderator()
         self.ticket_events = ticket_events
         self.line_queue = line_queue
+        self.query_router = query_router or QueryRouter()
 
     async def get_chat_state(self, user: UserModel) -> ChatStateResponseSchema:
         """Возвращает текущее состояние переписки и историю сообщений клиента.
@@ -273,17 +279,175 @@ class ChatService:
         await self.repo.save_message(client_message)
         await self.session.commit()
 
-        await self.redis_context.add_message(
-            ticket_id=active_ticket.id,
-            sender=MessageSenderType.CLIENT.value,
-            text=payload.text,
-            timestamp=client_message.created_at,
+        if self.redis_context:
+            await self.redis_context.add_message(
+                ticket_id=active_ticket.id,
+                sender=MessageSenderType.CLIENT.value,
+                text=payload.text,
+                timestamp=client_message.created_at,
+            )
+
+        # 1. Сбор контекста предыдущих реплик диалога (до 6 последних реплик)
+        conversation_history: list[dict[str, str]] = []
+        if self.redis_context:
+            try:
+                cached_msgs = await self.redis_context.get_messages(
+                    active_ticket.id
+                )
+                if cached_msgs:
+                    for m in cached_msgs[:-1][-6:]:
+                        sender_role = (
+                            "user"
+                            if m.get("sender")
+                            == MessageSenderType.CLIENT.value
+                            else "assistant"
+                        )
+                        conversation_history.append(
+                            {"role": sender_role, "text": m.get("text", "")}
+                        )
+            except Exception as exc:
+                logger.warning(
+                    "Не удалось получить контекст диалога из Redis: %s", exc
+                )
+
+        if not conversation_history:
+            recent_db_msgs = await self.repo.get_recent_messages(
+                chat.id, limit=7
+            )
+            for m in recent_db_msgs:
+                if m.id == client_message.id:
+                    continue
+                sender_role = (
+                    "user"
+                    if m.sender_type == MessageSenderType.CLIENT
+                    else "assistant"
+                )
+                conversation_history.append(
+                    {"role": sender_role, "text": m.text}
+                )
+            conversation_history = conversation_history[-6:]
+
+        # 2. Анализ и классификация сообщения через QueryRouter
+        route_output = await self.query_router.route(
+            payload.text, conversation_history=conversation_history
         )
 
+        # 3. Обновление приоритета и линии тикета в БД
+        priority_map = {
+            "P0": TicketPriority.P0,
+            "P1": TicketPriority.P1,
+            "P2": TicketPriority.P2,
+        }
+        if route_output.priority in priority_map:
+            active_ticket.priority = priority_map[route_output.priority]
+
+        # При наличии кодов ошибок (0x...) повышаем до P0 по регламенту отказоустойчивости
+        if route_output.error_codes:
+            active_ticket.priority = TicketPriority.P0
+
+        if route_output.support_line:
+            line_stmt = select(SupportLineModel.id).where(
+                SupportLineModel.code == route_output.support_line
+            )
+            matched_line_id = (await self.session.scalars(line_stmt)).first()
+            if matched_line_id is not None:
+                active_ticket.line_id = matched_line_id
+
+        await self.ticket_repo.update(active_ticket)
+        await self.session.commit()
+
+        # 4. Перехват non-RAG намерений (chitchat и out_of_domain)
+        if route_output.intent == "chitchat":
+            chitchat_text = (
+                "Здравствуйте! Я виртуальный ассистент службы поддержки Портала поставщиков Москвы. "
+                "Чем я могу помочь вам по регламенту, офертам или котировочным сессиям?"
+            )
+            bot_message_id = uuid6.uuid7()
+            bot_message = MessageModel(
+                id=bot_message_id,
+                ticket_id=active_ticket.id,
+                sender_type=MessageSenderType.BOT,
+                sender_id=None,
+                text=chitchat_text,
+                moderation_status=MessageModerationStatus.PASSED,
+                created_at=datetime.now(settings.TIMEZONE),
+            )
+            await self.repo.save_message(bot_message)
+            await self.session.commit()
+
+            if self.redis_context:
+                await self.redis_context.add_message(
+                    ticket_id=active_ticket.id,
+                    sender=MessageSenderType.BOT.value,
+                    text=chitchat_text,
+                    timestamp=bot_message.created_at,
+                )
+
+            sent_event = RagSentenceEventSchema(
+                sentence_idx=0,
+                text=chitchat_text,
+                verified=True,
+            )
+            yield f"event: {sent_event.event}\ndata: {sent_event.model_dump_json(exclude={'event'})}\n\n"
+
+            done_event = RagDoneEventSchema(
+                message_id=bot_message_id,
+                text=chitchat_text,
+                all_verified=True,
+                ticket_id=active_ticket.id,
+            )
+            yield f"event: {done_event.event}\ndata: {done_event.model_dump_json(exclude={'event'})}\n\n"
+            return
+
+        if route_output.intent == "out_of_domain":
+            refusal_text = (
+                "Я специализированный консультант по закупкам и регламентам Портала поставщиков Москвы. "
+                "Я не могу отвечать на вопросы на отвлеченные темы. "
+                "Пожалуйста, задайте вопрос по регламенту, участию в закупках или работе личного кабинета."
+            )
+            bot_message_id = uuid6.uuid7()
+            bot_message = MessageModel(
+                id=bot_message_id,
+                ticket_id=active_ticket.id,
+                sender_type=MessageSenderType.BOT,
+                sender_id=None,
+                text=refusal_text,
+                moderation_status=MessageModerationStatus.PASSED,
+                created_at=datetime.now(settings.TIMEZONE),
+            )
+            await self.repo.save_message(bot_message)
+            await self.session.commit()
+
+            if self.redis_context:
+                await self.redis_context.add_message(
+                    ticket_id=active_ticket.id,
+                    sender=MessageSenderType.BOT.value,
+                    text=refusal_text,
+                    timestamp=bot_message.created_at,
+                )
+
+            sent_event = RagSentenceEventSchema(
+                sentence_idx=0,
+                text=refusal_text,
+                verified=True,
+            )
+            yield f"event: {sent_event.event}\ndata: {sent_event.model_dump_json(exclude={'event'})}\n\n"
+
+            done_event = RagDoneEventSchema(
+                message_id=bot_message_id,
+                text=refusal_text,
+                all_verified=True,
+                ticket_id=active_ticket.id,
+            )
+            yield f"event: {done_event.event}\ndata: {done_event.model_dump_json(exclude={'event'})}\n\n"
+            return
+
+        # 5. Полноценный запуск RAG с контекстом диалога
         bot_message_id = uuid6.uuid7()
         rag_request = RagQueryRequestSchema(
             query=payload.text,
             message_id=bot_message_id,
+            conversation_history=conversation_history,
         )
 
         collected_sources: list[RagSourceChunkSchema] = []
@@ -319,12 +483,13 @@ class ChatService:
                     )
                     await self.session.commit()
 
-                    await self.redis_context.add_message(
-                        ticket_id=active_ticket.id,
-                        sender=MessageSenderType.BOT.value,
-                        text=event.text,
-                        timestamp=bot_message.created_at,
-                    )
+                    if self.redis_context:
+                        await self.redis_context.add_message(
+                            ticket_id=active_ticket.id,
+                            sender=MessageSenderType.BOT.value,
+                            text=event.text,
+                            timestamp=bot_message.created_at,
+                        )
                 elif isinstance(event, RagDegradedModeEventSchema):
                     target_bot_id = bot_message_id
                     bot_message = MessageModel(
@@ -352,12 +517,15 @@ class ChatService:
                     )
                     await self.session.commit()
 
-                    await self.redis_context.add_message(
-                        ticket_id=active_ticket.id,
-                        sender=MessageSenderType.BOT.value,
-                        text=event.message,
-                        timestamp=bot_message.created_at,
-                    )
+                    if self.redis_context:
+                        await self.redis_context.add_message(
+                            ticket_id=active_ticket.id,
+                            sender=MessageSenderType.BOT.value,
+                            text=event.message,
+                            timestamp=bot_message.created_at,
+                        )
+                    event.ticket_id = active_ticket.id
+                    event.message_id = target_bot_id
 
                 if isinstance(event, RagDoneEventSchema):
                     event.ticket_id = active_ticket.id
@@ -375,6 +543,8 @@ class ChatService:
             degraded_event = RagDegradedModeEventSchema(
                 message=fallback_text,
                 sources=collected_sources,
+                ticket_id=active_ticket.id,
+                message_id=bot_message_id,
             )
             bot_message = MessageModel(
                 id=bot_message_id,
@@ -399,12 +569,13 @@ class ChatService:
             await self.repo.save_message(bot_message, sources=source_models)
             await self.session.commit()
 
-            await self.redis_context.add_message(
-                ticket_id=active_ticket.id,
-                sender=MessageSenderType.BOT.value,
-                text=fallback_text,
-                timestamp=bot_message.created_at,
-            )
+            if self.redis_context:
+                await self.redis_context.add_message(
+                    ticket_id=active_ticket.id,
+                    sender=MessageSenderType.BOT.value,
+                    text=fallback_text,
+                    timestamp=bot_message.created_at,
+                )
 
             data_json = degraded_event.model_dump_json(exclude={"event"})
             yield f"event: {degraded_event.event}\ndata: {data_json}\n\n"

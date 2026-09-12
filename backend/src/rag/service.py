@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from src.rag.generator import RagStreamGenerator
+from src.rag.reranker import LexicalDenseReranker
 from src.rag.retriever import Retriever
 from src.rag.schemas import (
     ContextChunk,
@@ -33,10 +34,12 @@ class RagService:
         self,
         generator: RagStreamGenerator | None = None,
         retriever: Retriever | None = None,
+        reranker: LexicalDenseReranker | None = None,
     ) -> None:
-        """Инициализирует RagService с генератором ответа и поисковым ретривером."""
+        """Инициализирует RagService с генератором ответа, ретривером и реранкером."""
         self.generator = generator or RagStreamGenerator()
         self.retriever = retriever or Retriever()
+        self.reranker = reranker or LexicalDenseReranker()
 
     async def _retrieve_context_chunks(
         self, payload: RagQueryRequestSchema
@@ -69,32 +72,32 @@ class RagService:
         )
         await asyncio.sleep(0.01)
 
-        yield RagStatusEventSchema(
-            code="reranking",
-            message="Анализ точности найденных статей...",
-        )
-        await asyncio.sleep(0.01)
-
         # 2. Поиск источников базы знаний через Retriever
         chunks = await self._retrieve_context_chunks(payload)
 
-        # Режим деградации (ADR 0005): если в базе знаний ничего не найдено,
+        # Режим деградации (ADR 0005): если в базе знаний ничего не найдено или низкая уверенность,
         # не вызываем генератор во избежание галлюцинаций
         if not chunks:
             yield RagDegradedModeEventSchema(
                 message=(
-                    "Информация по вашему запросу не найдена в нормативных регламентах "
-                    "Портала поставщиков Москвы. Пожалуйста, уточните вопрос или "
-                    "обратитесь к специалисту поддержки."
+                    "В нормативной базе Портала поставщиков Москвы не найдена информация по вашему вопросу. "
+                    "Рекомендуем уточнить формулировку или обратиться к специалисту поддержки."
                 ),
                 sources=[],
             )
             return
 
+        # 3. Переранжирование найденных фрагментов
+        yield RagStatusEventSchema(
+            code="reranking",
+            message="Анализ точности найденных статей...",
+        )
+        chunks = self.reranker.rerank(payload.query, chunks)
+
         yield RagSourcesEventSchema(sources=chunks)
         await asyncio.sleep(0.01)
 
-        # 3. Потоковая генерация предложений с инлайн-валидацией через RagStreamGenerator
+        # 4. Потоковая генерация предложений с инлайн-валидацией через RagStreamGenerator
         async for event in self.generator.generate_response_stream(
             query=payload.query,
             chunks=chunks,
