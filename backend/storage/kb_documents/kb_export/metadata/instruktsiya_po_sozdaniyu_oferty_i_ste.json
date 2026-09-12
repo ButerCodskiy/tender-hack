@@ -1,0 +1,15 @@
+{
+  "filename": "Инструкция по созданию оферты и СТЕ.pdf",
+  "sha256": "ce50227cb1bb29b9145dd0fb52181c353c03bb11e00a0ab467cf544914b20159",
+  "status": "success",
+  "size_bytes": 3891038,
+  "doc_type": "pdf",
+  "pages_or_sheets": 1,
+  "tables_count": 0,
+  "duration_sec": 67.47,
+  "key_used": "llx-HR...CGoZ",
+  "error": null,
+  "processed_at": "2026-09-11T23:12:51.816205+00:00",
+  "output_markdown": "kb_export\\markdown\\instruktsiya_po_sozdaniyu_oferty_i_ste.md",
+  "output_metadata": "kb_export\\metadata\\instruktsiya_po_sozdaniyu_oferty_i_ste.json"
+}

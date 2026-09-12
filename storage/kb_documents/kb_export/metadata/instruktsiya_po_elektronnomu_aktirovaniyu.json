@@ -1,0 +1,15 @@
+{
+  "filename": "Инструкция по электронному актированию.pdf",
+  "sha256": "d14f883b14f8f117842541900300901404b37d43cdddf13c3e3266cfbd9155b3",
+  "status": "success",
+  "size_bytes": 4843247,
+  "doc_type": "pdf",
+  "pages_or_sheets": 1,
+  "tables_count": 3,
+  "duration_sec": 62.16,
+  "key_used": "llx-HR...CGoZ",
+  "error": null,
+  "processed_at": "2026-09-11T23:14:23.682879+00:00",
+  "output_markdown": "kb_export\\markdown\\instruktsiya_po_elektronnomu_aktirovaniyu.md",
+  "output_metadata": "kb_export\\metadata\\instruktsiya_po_elektronnomu_aktirovaniyu.json"
+}

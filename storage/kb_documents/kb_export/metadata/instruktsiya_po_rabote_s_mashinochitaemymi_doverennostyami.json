@@ -1,0 +1,15 @@
+{
+  "filename": "Инструкция по работе с машиночитаемыми доверенностями.pdf",
+  "sha256": "755870a7454fd166146bfd64a7c50009fc834340798d28ff9cee3132265272b9",
+  "status": "success",
+  "size_bytes": 1122812,
+  "doc_type": "pdf",
+  "pages_or_sheets": 1,
+  "tables_count": 0,
+  "duration_sec": 19.97,
+  "key_used": "llx-hM...5Qg7",
+  "error": null,
+  "processed_at": "2026-09-11T23:06:12.151359+00:00",
+  "output_markdown": "kb_export\\markdown\\instruktsiya_po_rabote_s_mashinochitaemymi_doverennostyami.md",
+  "output_metadata": "kb_export\\metadata\\instruktsiya_po_rabote_s_mashinochitaemymi_doverennostyami.json"
+}
