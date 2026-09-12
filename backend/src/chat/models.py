@@ -302,6 +302,28 @@ class MessageModel(Base):
         order_by="MessageSourceModel.created_at.asc()",
     )
 
+    @property
+    def sender_name(self) -> str | None:
+        """Отображаемое имя автора реплики."""
+        sender_user = self.__dict__.get("sender")
+        if sender_user is not None:
+            return sender_user.full_name or sender_user.email
+        if self.sender_type == MessageSenderType.BOT.value:
+            return "ИИ-Ассистент"
+        if self.sender_type == MessageSenderType.SYSTEM.value:
+            return "Система"
+        return None
+
+    @property
+    def sender_role(self) -> str | None:
+        """Системная роль автора реплики."""
+        sender_user = self.__dict__.get("sender")
+        if sender_user is not None:
+            user_role = sender_user.__dict__.get("role")
+            if user_role is not None:
+                return user_role.code
+        return self.sender_type
+
     def __repr__(self) -> str:
         return (
             f"<MessageModel id={self.id} ticket_id={self.ticket_id} "

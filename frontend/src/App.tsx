@@ -107,6 +107,16 @@ export const App: React.FC = () => {
               ticketMap.set(tId, []);
               ticketOrder.push(tId);
             }
+            const senderName =
+              m.sender_name ||
+              (m.sender_type === 'operator'
+                ? state.active_ticket?.assigned_operator_name || 'Оператор службы поддержки'
+                : m.sender_type === 'admin'
+                ? 'Администратор Портала'
+                : m.sender_type === 'bot'
+                ? 'ИИ-Ассистент Портала Поставщиков'
+                : undefined);
+
             const frontendMsg: Message = {
               id: m.id,
               ticket_id: tId,
@@ -118,6 +128,8 @@ export const App: React.FC = () => {
                   ? 'system'
                   : 'assistant',
               sender_type: m.sender_type,
+              sender_name: senderName,
+              sender_role: m.sender_role || m.sender_type,
               timestamp: new Date(m.created_at).toLocaleTimeString([], {
                 hour: '2-digit',
                 minute: '2-digit',
@@ -125,6 +137,8 @@ export const App: React.FC = () => {
               actions:
                 m.sender_type === 'client'
                   ? ['copy', 'edit']
+                  : m.sender_type === 'bot'
+                  ? ['copy', 'regenerate', 'thumbs_up', 'thumbs_down']
                   : ['copy', 'thumbs_up', 'thumbs_down'],
               needsFeedbackButtons:
                 m.sender_type === 'bot' &&
@@ -232,17 +246,35 @@ export const App: React.FC = () => {
         );
       } else if (event === 'new_message') {
         const targetTicketId = data.ticket_id || activeTicketId;
+        const senderType = data.sender_type || (data.sender_role === 'admin' ? 'admin' : 'operator');
+        const senderName =
+          data.sender_name ||
+          (senderType === 'operator'
+            ? operatorName || 'Оператор службы поддержки'
+            : senderType === 'admin'
+            ? 'Администратор Портала'
+            : senderType === 'bot'
+            ? 'ИИ-Ассистент Портала Поставщиков'
+            : undefined);
+
         const newMsg: Message = {
           id: data.id || `msg-${Date.now()}`,
           ticket_id: targetTicketId || undefined,
           content: data.text || '',
-          type: data.sender_type === 'operator' ? 'assistant' : 'system',
-          sender_type: data.sender_type || 'operator',
+          type:
+            senderType === 'client'
+              ? 'user'
+              : senderType === 'system'
+              ? 'system'
+              : 'assistant',
+          sender_type: senderType,
+          sender_name: senderName,
+          sender_role: data.sender_role || senderType,
           timestamp: new Date(data.created_at || Date.now()).toLocaleTimeString([], {
             hour: '2-digit',
             minute: '2-digit',
           }),
-          actions: ['copy'],
+          actions: senderType === 'client' ? ['copy', 'edit'] : ['copy'],
         };
 
         setSessions((prev) =>

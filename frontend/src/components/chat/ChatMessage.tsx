@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   Headphones,
   AlertTriangle,
+  ShieldCheck,
 } from 'lucide-react';
 import { Message } from '../../types/chat';
 
@@ -66,6 +67,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           <span className="text-xs font-bold text-[#264b82]">
             ИИ-Ассистент Портала Поставщиков
           </span>
+          <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-none bg-[#eaf6ff] text-[#264b82] border border-[#b9dbf7]">
+            ИИ-Бот
+          </span>
         </div>
         <div className="flex items-center gap-1.5 pl-8">
           <div className="size-1.5 bg-[#264b82] animate-bounce [animation-delay:-0.3s]" />
@@ -80,7 +84,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   }
 
   // 2. System State
-  if (message.type === 'system') {
+  if (message.type === 'system' || message.sender_type === 'system') {
     return (
       <div className="my-3 flex justify-center">
         <div className="max-w-xl px-4 py-2 rounded-none bg-[#fffbe6] border border-[#fbbd08]/50 text-[#1a1a1a] text-xs flex items-start gap-2.5">
@@ -94,11 +98,14 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     );
   }
 
-  // 3. User Message
-  if (message.type === 'user') {
+  // 3. User Message (Поставщик)
+  if (message.type === 'user' || message.sender_type === 'client') {
     return (
       <div className="flex justify-end py-2 group w-full min-w-0">
         <div className="w-full max-w-2xl flex flex-col items-end min-w-0">
+          <div className="flex items-center gap-1.5 mb-1 mr-1">
+            <span className="text-[11px] font-bold text-[#7f8792]">Вы (Поставщик)</span>
+          </div>
           {isEditing ? (
             <div className="w-full bg-white rounded-none p-3 border border-[#264b82]">
               <textarea
@@ -163,22 +170,69 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     );
   }
 
-  // 4. Assistant Message
+  // 4. Incoming Message: Could be Bot, Operator, or Admin
+  const isAdmin = message.sender_type === 'admin' || message.sender_role === 'admin';
+  const isOperator =
+    !isAdmin &&
+    (message.sender_type === 'operator' ||
+      message.sender_role === 'operator' ||
+      message.sender_role === 'supervisor' ||
+      message.id.startsWith('op-') ||
+      message.id.startsWith('operator-'));
+  const isBot = !isAdmin && !isOperator;
+
+  const senderConfig = isAdmin
+    ? {
+        title: message.sender_name || 'Администратор Портала',
+        badge: 'Администратор',
+        badgeClass: 'bg-[#f3e8ff] text-[#6b21a8] border-[#d8b4fe]',
+        iconBgClass: 'bg-[#6b21a8] text-white',
+        titleColorClass: 'text-[#6b21a8]',
+        bubbleBorderClass: 'border-l-4 border-l-[#6b21a8]',
+        Icon: ShieldCheck,
+      }
+    : isOperator
+    ? {
+        title: message.sender_name || 'Оператор службы поддержки',
+        badge: 'Оператор поддержки',
+        badgeClass: 'bg-[#e7f8f2] text-[#0d9b68] border-[#a3e3cb]',
+        iconBgClass: 'bg-[#0d9b68] text-white',
+        titleColorClass: 'text-[#0d9b68]',
+        bubbleBorderClass: 'border-l-4 border-l-[#0d9b68]',
+        Icon: Headphones,
+      }
+    : {
+        title: message.sender_name || 'ИИ-Ассистент Портала Поставщиков',
+        badge: 'ИИ-Бот',
+        badgeClass: 'bg-[#eaf6ff] text-[#264b82] border-[#b9dbf7]',
+        iconBgClass: 'bg-[#264b82] text-white',
+        titleColorClass: 'text-[#264b82]',
+        bubbleBorderClass: '',
+        Icon: Sparkles,
+      };
+
+  const SenderIcon = senderConfig.Icon;
+
   return (
     <div className="flex flex-col space-y-2 py-3 group w-full min-w-0">
-      {/* Bot Header */}
+      {/* Sender Header */}
       <div className="flex items-center gap-2">
-        <div className="size-6 rounded-none bg-[#264b82] flex items-center justify-center text-white shrink-0">
-          <Sparkles className="size-3.5" />
+        <div className={`size-6 rounded-none ${senderConfig.iconBgClass} flex items-center justify-center shrink-0`}>
+          <SenderIcon className="size-3.5" />
         </div>
-        <span className="text-xs font-bold text-[#264b82] truncate">
-          ИИ-Ассистент Портала Поставщиков
-        </span>
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={`text-xs font-bold ${senderConfig.titleColorClass} truncate`}>
+            {senderConfig.title}
+          </span>
+          <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-none border ${senderConfig.badgeClass} shrink-0`}>
+            {senderConfig.badge}
+          </span>
+        </div>
         <span className="text-[11px] text-[#7f8792] ml-auto shrink-0">{message.timestamp}</span>
       </div>
 
       {/* Message Content Bubble */}
-      <div className="bg-white border border-[#e5e5e5] rounded-none p-4 text-[#1a1a1a] text-[14px] leading-relaxed space-y-3 min-w-0">
+      <div className={`bg-white border border-[#e5e5e5] ${senderConfig.bubbleBorderClass} rounded-none p-4 text-[#1a1a1a] text-[14px] leading-relaxed space-y-3 min-w-0`}>
         <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
           {message.content}
           {message.isStreaming && (
@@ -244,7 +298,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                 )}
               </button>
 
-              {onRegenerate && (
+              {/* Only show regenerate for bot messages */}
+              {isBot && onRegenerate && (
                 <button
                   type="button"
                   onClick={() => onRegenerate(message.id)}
@@ -291,7 +346,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
             </div>
 
             {/* Business Action Buttons: Вопрос решен / Позвать специалиста */}
-            {message.needsFeedbackButtons && (
+            {message.needsFeedbackButtons ? (
               <div className="flex items-center gap-2">
                 {onResolveTicket && (
                   <button
@@ -304,7 +359,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                   </button>
                 )}
 
-                {onEscalateToOperator && (
+                {isBot && onEscalateToOperator && (
                   isEscalated ? (
                     <span
                       title="Специалист уже вызван и подключается к диалогу"
@@ -325,6 +380,19 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                   )
                 )}
               </div>
+            ) : (
+              !isBot && onResolveTicket && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={onResolveTicket}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-none text-xs font-bold text-[#0d9b68] bg-transparent hover:bg-[#e7f8f2] border border-[#0d9b68] transition cursor-pointer"
+                  >
+                    <CheckCircle2 className="size-3.5 text-[#0d9b68]" />
+                    <span>Вопрос решен</span>
+                  </button>
+                </div>
+              )
             )}
           </div>
         )}

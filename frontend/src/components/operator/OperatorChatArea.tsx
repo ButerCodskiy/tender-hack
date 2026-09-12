@@ -164,7 +164,11 @@ export const OperatorChatArea: React.FC<OperatorChatAreaProps> = ({
         {workspace.messages.map((msg) => {
           const isSystem = msg.type === 'system' || msg.sender_type === 'system';
           const isClient = msg.sender_type === 'client' || msg.type === 'user';
-          const isBot = msg.sender_type === 'bot' || (msg.id.startsWith('bot-') && msg.sender_type !== 'operator');
+          const isAdmin = msg.sender_type === 'admin' || msg.sender_role === 'admin';
+          const isBot =
+            !isAdmin &&
+            (msg.sender_type === 'bot' ||
+              (msg.id.startsWith('bot-') && msg.sender_type !== 'operator'));
 
           // 1. System notification
           if (isSystem) {
@@ -201,7 +205,32 @@ export const OperatorChatArea: React.FC<OperatorChatAreaProps> = ({
             );
           }
 
-          // 3. AI Bot message: Left-aligned with distinctive bot styling
+          // 3. Admin message: Left-aligned with distinctive purple styling
+          if (isAdmin) {
+            return (
+              <div key={msg.id} className="flex items-start gap-2.5 max-w-2xl">
+                <div className="size-7 rounded-none bg-[#6b21a8] flex items-center justify-center text-white shrink-0 mt-0.5">
+                  <ShieldAlert className="size-3.5" />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-[#6b21a8]">
+                      {msg.sender_name || 'Администратор'}
+                    </span>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded-none bg-[#f3e8ff] text-[#6b21a8] border border-[#d8b4fe] font-bold">
+                      Администратор
+                    </span>
+                    <span className="text-[10px] text-[#7f8792] font-mono">{msg.timestamp}</span>
+                  </div>
+                  <div className="p-3.5 rounded-none bg-white border border-[#e5e5e5] border-l-4 border-l-[#6b21a8] text-xs md:text-[13px] text-[#1a1a1a] leading-relaxed break-words [overflow-wrap:anywhere]">
+                    {msg.content}
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          // 4. AI Bot message: Left-aligned with distinctive bot styling
           if (isBot) {
             return (
               <div key={msg.id} className="flex items-start gap-2.5 max-w-2xl">

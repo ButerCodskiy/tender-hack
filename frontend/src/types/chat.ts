@@ -8,12 +8,16 @@ export interface Citation {
   url?: string;
 }
 
+export type MessageSenderType = 'client' | 'bot' | 'operator' | 'system' | 'admin';
+
 export interface Message {
   id: string;
   ticket_id?: string;
   content: string;
   type: MessageType;
-  sender_type?: 'client' | 'bot' | 'operator' | 'system';
+  sender_type?: MessageSenderType;
+  sender_name?: string;
+  sender_role?: string;
   timestamp: string;
   actions: ('copy' | 'edit' | 'regenerate' | 'thumbs_up' | 'thumbs_down')[];
   citations?: Citation[];

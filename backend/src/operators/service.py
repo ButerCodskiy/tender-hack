@@ -457,11 +457,23 @@ class OperatorService:
         msg = await self.operator_repo.save_operator_message(
             ticket_id=ticket.id, operator_id=user_id, text=text
         )
+        operator_name = (
+            ticket.assigned_operator.full_name
+            if ticket.assigned_operator and ticket.assigned_operator.full_name
+            else "Оператор поддержки"
+        )
+        operator_role = (
+            ticket.assigned_operator.role.code
+            if ticket.assigned_operator and ticket.assigned_operator.role
+            else "operator"
+        )
         msg_dto = MessageResponseSchema(
             id=msg.id,
             ticket_id=msg.ticket_id,
             sender_type=str(msg.sender_type),
             sender_id=msg.sender_id,
+            sender_name=operator_name,
+            sender_role=operator_role,
             text=msg.text,
             moderation_status=str(msg.moderation_status),
             sources=[],
