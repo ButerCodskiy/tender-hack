@@ -2,11 +2,11 @@ import json
 import logging
 from collections.abc import AsyncGenerator
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 import uuid6
 from fastapi import HTTPException, Request, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.models import UserModel
@@ -26,6 +26,7 @@ from src.chat.moderation import (
     get_moderator,
 )
 from src.chat.repository import ChatRepository, TicketRepository
+from src.chat.router import EscalationRouter
 from src.chat.schemas import (
     ActiveTicketSummarySchema,
     CancelTicketResponseSchema,
@@ -41,7 +42,6 @@ from src.core.redis_client import (
     RedisLineQueue,
     RedisTicketEvents,
 )
-from src.operators.models import SupportLineModel
 from src.rag.router import QueryRouter
 from src.rag.schemas import (
     RagDegradedModeEventSchema,
@@ -70,6 +70,7 @@ class ChatService:
         ticket_events: RedisTicketEvents | None = None,
         line_queue: RedisLineQueue | None = None,
         query_router: QueryRouter | None = None,
+        escalation_router: EscalationRouter | None = None,
     ) -> None:
         """Инициализирует сервис диалогов репозиториями, сессией БД, поисковым ядром и Redis."""
         self.repo = repo
@@ -81,6 +82,7 @@ class ChatService:
         self.ticket_events = ticket_events
         self.line_queue = line_queue
         self.query_router = query_router or QueryRouter()
+        self.escalation_router = escalation_router or EscalationRouter()
 
     async def get_chat_state(self, user: UserModel) -> ChatStateResponseSchema:
         """Возвращает текущее состояние переписки и историю сообщений клиента.
@@ -402,14 +404,6 @@ class ChatService:
         # При наличии кодов ошибок (0x...) повышаем до P0 по регламенту отказоустойчивости
         if route_output.error_codes:
             active_ticket.priority = TicketPriority.P0
-
-        if route_output.support_line:
-            line_stmt = select(SupportLineModel.id).where(
-                SupportLineModel.code == route_output.support_line
-            )
-            matched_line_id = (await self.session.scalars(line_stmt)).first()
-            if matched_line_id is not None:
-                active_ticket.line_id = matched_line_id
 
         await self.ticket_repo.update(active_ticket)
         await self.session.commit()
@@ -979,24 +973,76 @@ class ChatService:
                 },
             )
 
-        line_code = "L1"
-        if active_ticket.line is not None:
+        # 1. Извлечение истории сообщений для контекста роутера
+        conversation_history: list[dict[str, Any]] = []
+        if self.redis_context is not None:
+            try:
+                recent_redis_msgs = await self.redis_context.get_messages(
+                    active_ticket.id
+                )
+                if recent_redis_msgs:
+                    for m in recent_redis_msgs[-8:]:
+                        sender_role = (
+                            "user"
+                            if m.get("sender")
+                            == MessageSenderType.CLIENT.value
+                            else "assistant"
+                        )
+                        conversation_history.append(
+                            {"role": sender_role, "text": m.get("text", "")}
+                        )
+            except Exception as exc:
+                logger.warning(
+                    "Не удалось получить контекст диалога из Redis для эскалации: %s",
+                    exc,
+                )
+
+        if not conversation_history:
+            recent_db_msgs = await self.repo.get_recent_messages(
+                chat.id, limit=8
+            )
+            for m in recent_db_msgs:
+                sender_role = (
+                    "user"
+                    if m.sender_type == MessageSenderType.CLIENT
+                    else "assistant"
+                )
+                conversation_history.append(
+                    {"role": sender_role, "text": m.text}
+                )
+
+        client_reason = (
+            payload.reason.strip()
+            if payload and payload.reason and payload.reason.strip()
+            else None
+        )
+
+        # 2. Интеллектуальная классификация линии поддержки через EscalationRouter
+        route_result = await self.escalation_router.route(
+            conversation_history=conversation_history,
+            client_reason=client_reason,
+        )
+        line_code = route_result.line
+
+        from src.operators.repository import SupportLineRepository
+
+        line_repo = SupportLineRepository(self.session)
+        target_line = await line_repo.get_by_code(line_code)
+        if target_line is not None:
+            active_ticket.line_id = target_line.id
+        elif active_ticket.line is not None:
             line_code = active_ticket.line.code
         else:
-            from src.operators.repository import SupportLineRepository
-
-            line_repo = SupportLineRepository(self.session)
-            l1_line = await line_repo.get_by_code(line_code)
+            l1_line = await line_repo.get_by_code("L1")
             if l1_line is not None:
                 active_ticket.line_id = l1_line.id
+            line_code = "L1"
 
         now = datetime.now(settings.TIMEZONE)
         active_ticket.status = TicketStatus.QUEUED.value
         active_ticket.opened_at = now
         active_ticket.escalation_reason = (
-            payload.reason
-            if payload and payload.reason
-            else "client_requested"
+            client_reason if client_reason else route_result.reason
         )
         await self.ticket_repo.update(active_ticket)
         await self.session.commit()
