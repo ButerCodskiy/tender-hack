@@ -75,6 +75,12 @@ class RagService:
         )
         await asyncio.sleep(0.01)
 
+        yield RagStatusEventSchema(
+            code="reranking",
+            message="Анализ точности найденных статей...",
+        )
+        await asyncio.sleep(0.01)
+
         # 2. Поиск источников базы знаний через Retriever
         chunks = await self._retrieve_context_chunks(payload)
 
@@ -91,10 +97,6 @@ class RagService:
             return
 
         # 3. Переранжирование найденных фрагментов
-        yield RagStatusEventSchema(
-            code="reranking",
-            message="Анализ точности найденных статей...",
-        )
         chunks = self.reranker.rerank(payload.query, chunks)
 
         yield RagSourcesEventSchema(sources=chunks)

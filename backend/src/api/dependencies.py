@@ -160,7 +160,7 @@ async def get_chat_service(
     redis_context: RedisContextDep,
     ticket_events: RedisTicketEventsDep,
     line_queue: RedisLineQueueDep,
-    escalation_router: EscalationRouterDep,
+    escalation_router: EscalationRouterDep = None,  # type: ignore[assignment]
 ) -> ChatService:
     """Провайдер сервиса диалогов ChatService."""
     return ChatService(
@@ -171,7 +171,7 @@ async def get_chat_service(
         redis_context=redis_context,
         ticket_events=ticket_events,
         line_queue=line_queue,
-        escalation_router=escalation_router,
+        escalation_router=escalation_router or get_escalation_router(),
     )
 
 

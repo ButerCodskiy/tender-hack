@@ -405,6 +405,18 @@ class ChatService:
         if route_output.error_codes:
             active_ticket.priority = TicketPriority.P0
 
+        if route_output.support_line:
+            from sqlalchemy import select
+
+            from src.operators.models import SupportLineModel
+
+            line_stmt = select(SupportLineModel.id).where(
+                SupportLineModel.code == route_output.support_line
+            )
+            matched_line_id = (await self.session.scalars(line_stmt)).first()
+            if matched_line_id is not None:
+                active_ticket.line_id = matched_line_id
+
         await self.ticket_repo.update(active_ticket)
         await self.session.commit()
 
