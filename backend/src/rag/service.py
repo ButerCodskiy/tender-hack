@@ -8,8 +8,10 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from src.rag.generator import RagStreamGenerator
+from src.rag.retriever import Retriever
 from src.rag.schemas import (
     ContextChunk,
+    RagDegradedModeEventSchema,
     RagQueryRequestSchema,
     RagResponseSchema,
     RagSourceChunkSchema,
@@ -30,29 +32,18 @@ class RagService:
     def __init__(
         self,
         generator: RagStreamGenerator | None = None,
+        retriever: Retriever | None = None,
     ) -> None:
-        """Инициализирует RagService с генератором ответа."""
+        """Инициализирует RagService с генератором ответа и поисковым ретривером."""
         self.generator = generator or RagStreamGenerator()
+        self.retriever = retriever or Retriever()
 
     async def _retrieve_context_chunks(
         self, payload: RagQueryRequestSchema
     ) -> list[ContextChunk]:
-        """Извлекает нормативные чанки базы знаний (стаб интерфейса HIGH-01)."""
-        return [
-            RagSourceChunkSchema(
-                chunk_id="chunk_portal_zakupki_reglament_sec4_p1",
-                doc_id="DOC_PORTAL_REGULATION_V6",
-                title="Регламент ведения котировочных сессий. Раздел 4. Подписание протоколов",
-                quote_text=(
-                    "Участник закупки вправе сформировать и подписать протокол разногласий "
-                    "в личном кабинете поставщика в течение 3 рабочих дней с момента "
-                    "публикации проекта контракта заказчиком."
-                ),
-                section_path="Раздел 4. Подписание протоколов",
-                source_url="https://zakupki.mos.ru/regulations/p4",
-                relevance_score=0.96,
-            )
-        ]
+        """Извлекает нормативные чанки базы знаний через двухканальный Retriever."""
+        chunks = await self.retriever.retrieve(payload.query)
+        return list(chunks)
 
     async def generate_answer(
         self, payload: RagQueryRequestSchema
@@ -63,7 +54,7 @@ class RagService:
         2. Найденные источники первоисточников (sources);
         3. Законченные предложения со сносками и инлайн-валидацией (sentence);
         4. Завершающее событие с полным текстом и агрегированной верификацией (done)
-           либо событие деградации при сбое генератора (degraded_mode).
+           либо событие деградации при сбое генератора или отсутствии статей (degraded_mode).
         """
         # 1. Промежуточные статусные события пайплайна
         yield RagStatusEventSchema(
@@ -84,8 +75,22 @@ class RagService:
         )
         await asyncio.sleep(0.01)
 
-        # 2. Найденные источники базы знаний (интерфейс ContextChunk)
+        # 2. Поиск источников базы знаний через Retriever
         chunks = await self._retrieve_context_chunks(payload)
+
+        # Режим деградации (ADR 0005): если в базе знаний ничего не найдено,
+        # не вызываем генератор во избежание галлюцинаций
+        if not chunks:
+            yield RagDegradedModeEventSchema(
+                message=(
+                    "Информация по вашему запросу не найдена в нормативных регламентах "
+                    "Портала поставщиков Москвы. Пожалуйста, уточните вопрос или "
+                    "обратитесь к специалисту поддержки."
+                ),
+                sources=[],
+            )
+            return
+
         yield RagSourcesEventSchema(sources=chunks)
         await asyncio.sleep(0.01)
 
