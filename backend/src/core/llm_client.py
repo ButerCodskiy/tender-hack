@@ -43,9 +43,9 @@ class OllamaStreamClient:
             "think": False,
             "stream": True,
             "options": {
-                "temperature": 0.3,
+                "temperature": 0.2,
                 "top_p": 0.9,
-                "num_predict": -1,
+                "num_predict": 2000,
             },
         }
 
@@ -111,9 +111,9 @@ class OllamaStreamClient:
             "think": False,
             "stream": False,
             "options": {
-                "temperature": 0.3,
+                "temperature": 0.2,
                 "top_p": 0.9,
-                "num_predict": -1,
+                "num_predict": 600,
             },
         }
 
@@ -129,7 +129,11 @@ class OllamaStreamClient:
                         f"Ollama API error: status {response.status_code}"
                     )
                 data = response.json()
-                return data.get("message", {}).get("content", "")
+                message = data.get("message", {})
+                content = message.get("content", "")
+                if not content and "thinking" in message:
+                    content = message.get("thinking", "")
+                return content
             except (httpx.ConnectError, httpx.ConnectTimeout) as err:
                 logger.error(
                     f"Не удалось подключиться к Ollama по адресу {self.base_url}: {err}."
