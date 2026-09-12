@@ -9,7 +9,7 @@ x-backend-base: &backend-base
     DB_HOST: postgres
     REDIS_HOST: redis
     QDRANT_HOST: qdrant
-    OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://100.65.4.110:9117}
+    OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://192.168.1.244:9117}
     KB_STORAGE_DIR: /data/kb_documents
   volumes:
     - ./backend/src:/app/src

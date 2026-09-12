@@ -6,6 +6,7 @@ from typing import Any, ClassVar, Protocol, runtime_checkable
 
 from src.analytics.models import IncidentType, RootCauseType
 from src.analytics.schemas import AuditLlmOutputSchema
+from src.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -288,14 +289,15 @@ class OllamaAuditLlmClient:
         self,
         prompt: str,
         system_prompt: str = AUDIT_SYSTEM_PROMPT,
-        timeout: float = 30.0,
+        timeout: float | None = None,
     ) -> AuditLlmOutputSchema:
         """Оценивает диалог через Ollama с мягкой нормализацией и автопереходом на заглушку."""
+        request_timeout = timeout or settings.OLLAMA_TIMEOUT_SECONDS
         try:
             raw_dict = await self.llm_client.generate_json(
                 prompt=prompt,
                 system_prompt=system_prompt,
-                timeout=timeout,
+                timeout=request_timeout,
             )
 
             politeness = self._normalize_score(

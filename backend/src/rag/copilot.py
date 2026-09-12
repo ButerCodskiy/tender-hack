@@ -7,6 +7,7 @@ from uuid import UUID
 
 from qdrant_client import AsyncQdrantClient
 
+from src.core.config import settings
 from src.core.qdrant_client import get_qdrant_client
 from src.operators.schemas import (
     CopilotSummaryResponseSchema,
@@ -185,14 +186,15 @@ class OllamaCopilotLlmClient:
         self,
         prompt: str,
         system_prompt: str = COPILOT_SYSTEM_PROMPT,
-        timeout: float = 30.0,
+        timeout: float | None = None,
     ) -> CopilotLlmOutputSchema:
         """Генерирует сводку диалога и черновик через Ollama с автопереходом на заглушку."""
+        request_timeout = timeout or settings.OLLAMA_TIMEOUT_SECONDS
         try:
             raw_dict = await self.llm_client.generate_json(
                 prompt=prompt,
                 system_prompt=system_prompt,
-                timeout=timeout,
+                timeout=request_timeout,
             )
 
             summary = str(raw_dict.get("summary") or "").strip()
