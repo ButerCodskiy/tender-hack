@@ -226,6 +226,12 @@ async def init_knowledge_base_collection(
             existing_names.append(col)
 
 
+_SHARED_DENSE_MODEL = None
+_SHARED_TOKENIZER = None
+_SHARED_DEVICE = None
+_LOAD_FAILED = False
+
+
 class HybridEmbeddingService:
     """Двухвекторный сервис эмбеддингов (Dense BGE-M3 1024D + Sparse BM25 Hashing)."""
 
@@ -234,39 +240,45 @@ class HybridEmbeddingService:
         self.model_name = model_name or getattr(
             settings, "EMBEDDING_MODEL_NAME", "BAAI/bge-m3"
         )
-        self._dense_model = None
-        self._tokenizer = None
-        self._load_failed = False
 
     def _ensure_dense_model(self) -> None:
-        """Ленивая загрузка bge-m3 при первом обращении (если разрешено в конфиге)."""
-        if self._dense_model is not None or self._load_failed:
+        """Ленивая загрузка bge-m3 при первом обращении (кэшируется глобально в памяти процесса)."""
+        global \
+            _SHARED_DENSE_MODEL, \
+            _SHARED_TOKENIZER, \
+            _SHARED_DEVICE, \
+            _LOAD_FAILED
+        if _SHARED_DENSE_MODEL is not None or _LOAD_FAILED:
             return
         if not getattr(settings, "ENABLE_LOCAL_NEURAL_EMBEDDINGS", False):
             return
         try:
+            import torch
             from transformers import AutoModel, AutoTokenizer
 
-            device = getattr(settings, "EMBEDDING_DEVICE", "cpu")
-            if device == "cuda":
-                import torch
-
-                if not torch.cuda.is_available():
+            target_device = getattr(settings, "EMBEDDING_DEVICE", None)
+            if target_device:
+                device = target_device
+                if device == "cuda" and not torch.cuda.is_available():
                     device = "cpu"
+            else:
+                device = "cuda" if torch.cuda.is_available() else "cpu"
 
             logger.info(
-                "Загрузка модели эмбеддингов %s на устройство %s...",
+                "Загрузка модели эмбеддингов %s в память (%s)...",
                 self.model_name,
                 device,
             )
-            self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-            self._dense_model = AutoModel.from_pretrained(self.model_name).to(
-                device
-            )
-            self._dense_model.eval()
-            self._device = device
+            _SHARED_TOKENIZER = AutoTokenizer.from_pretrained(self.model_name)
+            _SHARED_DENSE_MODEL = AutoModel.from_pretrained(
+                self.model_name
+            ).to(device)
+            _SHARED_DENSE_MODEL.eval()
+            _SHARED_DEVICE = device
             logger.info(
-                "Модель эмбеддингов %s успешно загружена.", self.model_name
+                "Модель эмбеддингов %s успешно загружена в память (%s).",
+                self.model_name,
+                device,
             )
         except Exception as exc:
             logger.warning(
@@ -274,25 +286,25 @@ class HybridEmbeddingService:
                 self.model_name,
                 exc,
             )
-            self._load_failed = True
+            _LOAD_FAILED = True
 
     def generate_dense_vector(self, text: str) -> list[float]:
         """Генерирует плотный 1024D вектор."""
         self._ensure_dense_model()
-        if self._dense_model is not None and self._tokenizer is not None:
+        if _SHARED_DENSE_MODEL is not None and _SHARED_TOKENIZER is not None:
             try:
                 import torch
 
-                device = getattr(self, "_device", "cpu")
+                device = _SHARED_DEVICE or getattr(self, "_device", "cpu")
                 with torch.no_grad():
-                    inputs = self._tokenizer(
+                    inputs = _SHARED_TOKENIZER(
                         [text],
                         padding=True,
                         truncation=True,
                         max_length=512,
                         return_tensors="pt",
                     ).to(device)
-                    outputs = self._dense_model(**inputs)
+                    outputs = _SHARED_DENSE_MODEL(**inputs)
                     cls_emb = outputs.last_hidden_state[:, 0]
                     norm_emb = torch.nn.functional.normalize(
                         cls_emb, p=2, dim=1
@@ -309,11 +321,15 @@ class HybridEmbeddingService:
         norm = sum(v * v for v in dense_vector) ** 0.5 or 1.0
         return [v / norm for v in dense_vector]
 
+    def generate_sparse_vector(self, text: str) -> models.SparseVector:
+        """Генерирует только sparse-вектор без повторного вычисления dense-вектора."""
+        return generate_sparse_bm25(text)
+
     def generate_vectors(self, text: str) -> dict[str, Any]:
         """Генерирует согласованную двухвекторную структуру (dense + sparse)."""
         return {
             "dense": self.generate_dense_vector(text),
-            "sparse": generate_sparse_bm25(text),
+            "sparse": self.generate_sparse_vector(text),
         }
 
     def create_point(

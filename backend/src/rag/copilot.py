@@ -1,15 +1,12 @@
 """Генерация сводки диалога и подсказок оператору (Copilot)."""
 
 import asyncio
-import json
 import logging
-from typing import Any, ClassVar, Protocol, runtime_checkable
+from typing import Any, ClassVar, Literal, Protocol, runtime_checkable
 from uuid import UUID
 
-import httpx
 from qdrant_client import AsyncQdrantClient
 
-from src.core.config import settings
 from src.core.qdrant_client import get_qdrant_client
 from src.operators.schemas import (
     CopilotSummaryResponseSchema,
@@ -23,14 +20,14 @@ logger = logging.getLogger(__name__)
 COPILOT_SYSTEM_PROMPT = (
     "Ты — экспертный аналитический ассистент AI Copilot для операторов службы поддержки "
     "Портала поставщиков Москвы (ЕАИСТ) и госзакупок по 44-ФЗ и 223-ФЗ.\n\n"
-    "Твоя задача — проанализировать историю диалога клиента и подготовить:\n"
-    "1. summary: краткую суть проблемы (1-2 предложения, строго факты без лишних слов);\n"
-    "2. suggested_line_code: рекомендованную линию поддержки (L1 - регламенты и навигация, "
-    "L2 - ошибки ЭЦП, КриптоПро и технические сбои, L3 - претензии, ФАС, блокировки и споры);\n"
-    "3. suggested_response: вежливый, профессиональный готовый черновик ответа для оператора "
-    "с четкими инструкциями по шагам;\n"
-    "4. recommended_chunk_ids: идентификаторы нормативных статей из базы знаний.\n\n"
-    "Ответ должен быть строго валидным объектом CopilotLlmOutputSchema."
+    "Твоя задача — проанализировать историю диалога клиента и вернуть строго валидный JSON:\n"
+    "{\n"
+    '  "summary": "Краткая суть проблемы клиента (1-2 предложения, строго факты)",\n'
+    '  "suggested_line_code": "L1", // одно из: "L1" (регламенты), "L2" (сбои ЭЦП/КриптоПро), "L3" (ФАС/споры/блокировки)\n'
+    '  "suggested_response": "Готовый вежливый черновик ответа для оператора с пошаговой инструкцией",\n'
+    '  "recommended_chunk_ids": [] // список ID статей регламентов или пустой список\n'
+    "}\n\n"
+    "Соблюдай деловой тон и точность ссылок на процедуры госзакупок."
 )
 
 
@@ -159,86 +156,90 @@ class MockCopilotLlmClient:
 
 
 class OllamaCopilotLlmClient:
-    """Клиент вызова локального инференса Ollama (/v1/chat/completions) с таймаутом и фолбэком."""
+    """Боевой клиент генерации подсказок Copilot через Ollama со страховочным резервом."""
 
     DEFAULT_TIMEOUT: float = 4.0
 
     def __init__(
         self,
-        base_url: str | None = None,
-        model: str | None = None,
+        llm_client: Any | None = None,
+        fallback_client: CopilotLlmClientProtocol | None = None,
         timeout: float = 4.0,
     ) -> None:
-        """Инициализирует подключение к локальному сервису Ollama."""
-        self.base_url = (base_url or settings.OLLAMA_BASE_URL).rstrip("/")
-        self.model = model or settings.OLLAMA_MODEL
+        """Инициализирует клиент инференса Ollama и резервную заглушку."""
+        from src.core.llm_client import get_llm_stream_client
+
+        self.llm_client = llm_client or get_llm_stream_client()
+        self.fallback_client = fallback_client or MockCopilotLlmClient()
         self.timeout = timeout
-        self.fallback_client = MockCopilotLlmClient()
+
+    @staticmethod
+    def _normalize_line_code(value: Any) -> Literal["L1", "L2", "L3"]:
+        """Приводит код линии поддержки к допустимому значению L1/L2/L3."""
+        val_str = str(value or "").strip().upper()
+        if val_str in ("L1", "L2", "L3"):
+            return val_str  # type: ignore[return-value]
+        if "2" in val_str:
+            return "L2"
+        if "3" in val_str:
+            return "L3"
+        return "L1"
 
     async def generate_copilot_summary(
         self,
         prompt: str,
-        system_prompt: str,
+        system_prompt: str = COPILOT_SYSTEM_PROMPT,
         timeout: float | None = None,
     ) -> CopilotLlmOutputSchema:
-        """Запрашивает подсказку у Ollama с ограничением времени до 4.0с и бесшовным откатом."""
-        effective_timeout = timeout if timeout is not None else self.timeout
-        endpoint = f"{self.base_url}/v1/chat/completions"
-        payload = {
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": 0.2,
-            "response_format": {"type": "json_object"},
-        }
-
-        timeout_config = httpx.Timeout(
-            effective_timeout, connect=min(1.5, effective_timeout)
-        )
-
+        """Генерирует сводку диалога и черновик через Ollama с автопереходом на заглушку."""
+        request_timeout = timeout if timeout is not None else self.timeout
         try:
-            async with httpx.AsyncClient(timeout=timeout_config) as client:
-                response = await client.post(endpoint, json=payload)
-                if response.status_code == 200:
-                    data = response.json()
-                    content = (
-                        data.get("choices", [{}])[0]
-                        .get("message", {})
-                        .get("content", "")
-                    )
-                    cleaned_content = content.strip()
-                    cleaned_content = cleaned_content.removeprefix("```json")
-                    cleaned_content = cleaned_content.removeprefix("```")
-                    cleaned_content = cleaned_content.removesuffix("```")
-                    cleaned_content = cleaned_content.strip()
+            raw_dict = await self.llm_client.generate_json(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                timeout=request_timeout,
+            )
 
-                    parsed = json.loads(cleaned_content)
-                    return CopilotLlmOutputSchema.model_validate(parsed)
+            summary = str(raw_dict.get("summary") or "").strip()
+            if not summary:
+                summary = "Клиент обратился за консультацией по работе на Портале поставщиков."
 
-                logger.warning(
-                    "Ollama API returned status %s. Triggering fallback.",
-                    response.status_code,
+            line_code = self._normalize_line_code(
+                raw_dict.get("suggested_line_code")
+            )
+
+            suggested_response = str(
+                raw_dict.get("suggested_response") or ""
+            ).strip()
+            if not suggested_response:
+                suggested_response = (
+                    "Здравствуйте! По вашему вопросу рекомендуем проверить данные в личном кабинете "
+                    "и следовать установленным регламентам Портала поставщиков."
                 )
-        except (httpx.TimeoutException, TimeoutError) as exc:
-            logger.warning(
-                "Ollama copilot timeout (%.1fs): %s. Seamless fallback to template.",
-                effective_timeout,
-                exc,
+
+            chunk_ids_raw = raw_dict.get("recommended_chunk_ids")
+            recommended_chunk_ids: list[str] = []
+            if isinstance(chunk_ids_raw, list):
+                recommended_chunk_ids = [
+                    str(item) for item in chunk_ids_raw if item
+                ]
+
+            return CopilotLlmOutputSchema(
+                summary=summary,
+                suggested_line_code=line_code,
+                suggested_response=suggested_response,
+                recommended_chunk_ids=recommended_chunk_ids,
             )
         except Exception as exc:
             logger.warning(
-                "Ollama copilot inference error: %s. Seamless fallback to template.",
+                "Сбой вызова Ollama при генерации подсказки Copilot (%s). Активирован страховочный резерв",
                 exc,
             )
-
-        # Бесшовный откат на быстрый эвристический ответ без падения интерфейса
-        return await self.fallback_client.generate_copilot_summary(
-            prompt=prompt,
-            system_prompt=system_prompt,
-            timeout=effective_timeout,
-        )
+            return await self.fallback_client.generate_copilot_summary(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                timeout=request_timeout,
+            )
 
 
 class CopilotService:
