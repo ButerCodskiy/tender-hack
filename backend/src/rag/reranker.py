@@ -75,15 +75,19 @@ class LexicalDenseReranker:
 
     def compute_exact_match_boost(
         self, query: str, chunk: ContextChunk
-    ) -> float:
-        """Вычисляет бонус за точное совпадение шестнадцатеричных кодов ошибок и статей законов."""
+    ) -> tuple[float, bool]:
+        """Вычисляет бонус и флаг pin_to_top за точное совпадение шестнадцатеричных кодов ошибок и статей законов."""
         target_parts = [
             chunk.title or "",
             chunk.section_path or "",
             chunk.quote_text or "",
         ]
         target_text = " ".join(target_parts).lower()
+        title_or_sec = (
+            f"{chunk.title or ''} {chunk.section_path or ''}".lower()
+        )
         boost = 0.0
+        is_pinned = False
 
         # 1. Проверка совпадения шестнадцатеричных кодов ошибок (0x...)
         query_hex = self.extract_hex_errors(query)
@@ -92,12 +96,16 @@ class LexicalDenseReranker:
             if query_hex.intersection(chunk_hex):
                 boost += 0.40
 
-        # 2. Проверка точного совпадения номеров статей (например, ст. 93, ст. 34)
+        # 2. Проверка точного совпадения номеров статей (например, ст. 93, ст. 34, статья 112)
         query_articles = self.extract_article_numbers(query)
         if query_articles:
             chunk_articles = self.extract_article_numbers(target_text)
             if query_articles.intersection(chunk_articles):
                 boost += 0.30
+                # Если номер статьи явно совпал в заголовке или секции, закрепляем статью в топ-1
+                title_articles = self.extract_article_numbers(title_or_sec)
+                if query_articles.intersection(title_articles):
+                    is_pinned = True
 
         # 3. Проверка совпадения правового режима (44-ФЗ / 223-ФЗ)
         query_laws = self.extract_law_regimes(query)
@@ -105,8 +113,11 @@ class LexicalDenseReranker:
             chunk_laws = self.extract_law_regimes(target_text)
             if query_laws.intersection(chunk_laws):
                 boost += 0.10
+                # Если в запросе режим 44-ФЗ/223-ФЗ и в заголовке прямо указана эта статья
+                if query_articles and is_pinned:
+                    boost += 0.10
 
-        return boost
+        return boost, is_pinned
 
     def rerank(
         self,
@@ -116,12 +127,13 @@ class LexicalDenseReranker:
         """Переранжирует список чанков по гибридной формуле:
 
         S = 0.65 * S_dense + 0.35 * S_lexical + ExactMatchBoost.
+        Закрепленные нормативные статьи (pin_to_top) всегда поднимаются в топ-1.
         Возвращает отсортированный по убыванию релевантности список чанков.
         """
         if not chunks:
             return []
 
-        scored_chunks: list[tuple[float, ContextChunk]] = []
+        scored_chunks: list[tuple[float, bool, ContextChunk]] = []
         for chunk in chunks:
             dense_score = (
                 chunk.relevance_score
@@ -129,7 +141,9 @@ class LexicalDenseReranker:
                 else 0.0
             )
             lex_score = self.compute_lexical_score(query, chunk)
-            exact_boost = self.compute_exact_match_boost(query, chunk)
+            exact_boost, is_pinned = self.compute_exact_match_boost(
+                query, chunk
+            )
 
             final_score = (
                 (self.dense_weight * dense_score)
@@ -138,16 +152,23 @@ class LexicalDenseReranker:
             )
 
             # Нормализация в диапазон [0.0, 1.0]
-            normalized_score = min(1.0, round(final_score, 4))
+            normalized_score = (
+                1.0 if is_pinned else min(1.0, round(final_score, 4))
+            )
 
             updated_chunk = chunk.model_copy(
-                update={"relevance_score": normalized_score}
+                update={
+                    "relevance_score": normalized_score,
+                    "pin_to_top": is_pinned,
+                }
             )
-            scored_chunks.append((final_score, updated_chunk))
+            scored_chunks.append((final_score, is_pinned, updated_chunk))
 
-        # Сортировка по невозрастанию итогового скора
-        scored_chunks.sort(key=lambda item: item[0], reverse=True)
-        return [chunk for _, chunk in scored_chunks]
+        # Сортировка: сначала закрепленные статьи (pin_to_top=True), затем по убыванию итогового скора
+        scored_chunks.sort(
+            key=lambda item: (1 if item[1] else 0, item[0]), reverse=True
+        )
+        return [chunk for _, _, chunk in scored_chunks]
 
 
 # Алиас для спецификаций

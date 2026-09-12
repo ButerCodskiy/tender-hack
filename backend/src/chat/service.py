@@ -443,9 +443,15 @@ class ChatService:
             return
 
         # 5. Полноценный запуск RAG с контекстом диалога
+        effective_query = (
+            route_output.standalone_query.strip()
+            if getattr(route_output, "standalone_query", None)
+            and route_output.standalone_query.strip()
+            else payload.text
+        )
         bot_message_id = uuid6.uuid7()
         rag_request = RagQueryRequestSchema(
-            query=payload.text,
+            query=effective_query,
             message_id=bot_message_id,
             conversation_history=conversation_history,
         )
