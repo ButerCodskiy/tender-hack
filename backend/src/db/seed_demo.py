@@ -117,28 +117,30 @@ async def seed() -> None:
         old_general_line = (await session.scalars(stmt_old_line)).first()
         if old_general_line:
             # Перепривязываем операторов и тикеты с general на L1
-            stmt_update_profiles = (
-                select(OperatorProfileModel).where(
-                    OperatorProfileModel.line_id == old_general_line.id
-                )
+            stmt_update_profiles = select(OperatorProfileModel).where(
+                OperatorProfileModel.line_id == old_general_line.id
             )
-            profiles_to_reassign = (await session.scalars(stmt_update_profiles)).all()
+            profiles_to_reassign = (
+                await session.scalars(stmt_update_profiles)
+            ).all()
             for p in profiles_to_reassign:
                 p.line_id = lines["L1"].id
 
-            stmt_update_tickets = (
-                select(TicketModel).where(
-                    TicketModel.line_id == old_general_line.id
-                )
+            stmt_update_tickets = select(TicketModel).where(
+                TicketModel.line_id == old_general_line.id
             )
-            tickets_to_reassign = (await session.scalars(stmt_update_tickets)).all()
+            tickets_to_reassign = (
+                await session.scalars(stmt_update_tickets)
+            ).all()
             for t in tickets_to_reassign:
                 t.line_id = lines["L1"].id
 
             await session.flush()
             await session.delete(old_general_line)
             await session.flush()
-            logger.info("Устаревшая линия general удалена, связанные профили переведены на L1")
+            logger.info(
+                "Устаревшая линия general удалена, связанные профили переведены на L1"
+            )
 
         # Сидирование демонстрационных пользователей (пароль: password123)
         default_pwd_hash = hash_password("password123")
@@ -225,7 +227,12 @@ async def seed() -> None:
                     max_slots=slots,
                 )
                 session.add(op_profile)
-                logger.info("Создан тестовый оператор %s (%s): %s", line_code, op_name, op_email)
+                logger.info(
+                    "Создан тестовый оператор %s (%s): %s",
+                    line_code,
+                    op_name,
+                    op_email,
+                )
             else:
                 stmt_prof = select(OperatorProfileModel).where(
                     OperatorProfileModel.user_id == op_user.id

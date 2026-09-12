@@ -54,7 +54,9 @@ class OllamaStreamClient:
 
         async with httpx.AsyncClient(timeout=timeout_config) as client:
             try:
-                async with client.stream("POST", endpoint, json=payload) as response:
+                async with client.stream(
+                    "POST", endpoint, json=payload
+                ) as response:
                     if response.status_code != 200:
                         error_body = await response.aread()
                         logger.error(
@@ -86,7 +88,9 @@ class OllamaStreamClient:
                     f"Ollama host unreachable at {self.base_url}"
                 ) from err
             except httpx.ReadTimeout as err:
-                logger.error(f"Превышен таймаут чтения потока Ollama ({request_timeout}s): {err}")
+                logger.error(
+                    f"Превышен таймаут чтения потока Ollama ({request_timeout}s): {err}"
+                )
                 raise TimeoutError("Ollama stream read timeout") from err
 
     async def generate_completion(
@@ -121,14 +125,18 @@ class OllamaStreamClient:
                     logger.error(
                         f"Ollama API вернул статус {response.status_code}: {response.text}"
                     )
-                    raise RuntimeError(f"Ollama API error: status {response.status_code}")
+                    raise RuntimeError(
+                        f"Ollama API error: status {response.status_code}"
+                    )
                 data = response.json()
                 return data.get("message", {}).get("content", "")
             except (httpx.ConnectError, httpx.ConnectTimeout) as err:
                 logger.error(
                     f"Не удалось подключиться к Ollama по адресу {self.base_url}: {err}."
                 )
-                raise ConnectionError(f"Ollama host unreachable at {self.base_url}") from err
+                raise ConnectionError(
+                    f"Ollama host unreachable at {self.base_url}"
+                ) from err
 
 
 def get_llm_stream_client() -> OllamaStreamClient:

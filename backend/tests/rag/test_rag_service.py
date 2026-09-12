@@ -21,7 +21,9 @@ from src.rag.schemas import (
 from src.rag.service import RagService
 
 
-def _get_mock_service(chunks: list[RagSourceChunkSchema] | None = None) -> RagService:
+def _get_mock_service(
+    chunks: list[RagSourceChunkSchema] | None = None,
+) -> RagService:
     """Создает изолированный RagService с мок-генератором и мок-ретривером."""
     if chunks is None:
         chunks = [

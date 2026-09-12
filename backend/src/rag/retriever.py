@@ -53,7 +53,9 @@ class Retriever:
             RagSourceChunkSchema(
                 chunk_id=str(point.payload.get("chunk_id", point.id)),
                 doc_id=point.payload.get("doc_id", ""),
-                title=point.payload.get("title") or point.payload.get("section_path") or "Нормативный регламент",
+                title=point.payload.get("title")
+                or point.payload.get("section_path")
+                or "Нормативный регламент",
                 quote_text=point.payload.get("text"),
                 section_path=point.payload.get("section_path"),
                 source_url=point.payload.get("source_url"),
