@@ -760,6 +760,59 @@ class ChatService:
                 ticket_id,
             )
 
+    async def _safe_enqueue_audit(
+        self, ticket_id: UUID, trigger_reason: str
+    ) -> None:
+        """Безопасно ставит задачу audit_ticket_quality в очередь Taskiq с синхронным фолбэком."""
+        try:
+            from src.analytics.tasks import audit_ticket_quality
+
+            await audit_ticket_quality.kiq(
+                {
+                    "ticket_id": str(ticket_id),
+                    "trigger_reason": trigger_reason,
+                }
+            )
+            logger.info(
+                "Задача audit_ticket_quality для тикета %s поставлена в очередь (%s)",
+                ticket_id,
+                trigger_reason,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Брокер Taskiq недоступен (%s), запуск синхронного аудита для тикета %s (фолбэк)",
+                exc,
+                ticket_id,
+            )
+            try:
+                import redis.asyncio as aioredis
+
+                from src.analytics.service import AnalyticsService
+
+                redis_client = getattr(self.redis_context, "redis", None)
+                if redis_client is None:
+                    redis_client = aioredis.from_url(
+                        settings.REDIS_URL, decode_responses=True
+                    )
+
+                analytics_service = AnalyticsService(
+                    session=self.session, redis=redis_client
+                )
+                await analytics_service.audit_ticket_quality(
+                    ticket_id=ticket_id,
+                    trigger_reason=trigger_reason,
+                )
+                logger.info(
+                    "Синхронный аудит для тикета %s успешно выполнен (фолбэк)",
+                    ticket_id,
+                )
+            except Exception as fallback_exc:
+                logger.error(
+                    "Сбой синхронного аудита для тикета %s: %s",
+                    ticket_id,
+                    fallback_exc,
+                )
+
     async def escalate_ticket(
         self,
         user: UserModel,
@@ -887,6 +940,8 @@ class ChatService:
 
         if ticket.line is not None and ticket.assigned_operator_id is not None:
             await self._safe_dispatch_task(ticket.line.code, "slot_freed")
+
+        await self._safe_enqueue_audit(ticket.id, "client_resolved")
 
         return ClientResolveTicketResponseSchema(
             status="resolved",
