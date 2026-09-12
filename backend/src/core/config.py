@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     QDRANT_HOST: str = "localhost"
     QDRANT_PORT: int = 6333
     QDRANT_GRPC_PORT: int = 6334
-    QDRANT_COLLECTION_NAME: str = "knowledge_base"
+    QDRANT_COLLECTION_NAME: str = "tender_chunks"
 
     # CORS
     CORS_ORIGINS: list[str] = [

@@ -54,35 +54,29 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   const getPromptIcon = (id: number) => {
     switch (id) {
       case 1:
-        return <Search className="size-4 text-primary-500" />;
+        return <Search className="size-4 text-[#264b82]" />;
       case 2:
-        return <KeyRound className="size-4 text-primary-500" />;
+        return <KeyRound className="size-4 text-[#264b82]" />;
       case 3:
-        return <Briefcase className="size-4 text-primary-500" />;
+        return <Briefcase className="size-4 text-[#264b82]" />;
       case 4:
-        return <Scale className="size-4 text-primary-500" />;
+        return <Scale className="size-4 text-[#264b82]" />;
       default:
-        return <Sparkles className="size-4 text-primary-500" />;
+        return <Sparkles className="size-4 text-[#db2b21]" />;
     }
   };
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-12 overflow-y-auto custom-scrollbar select-none">
+    <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-12 overflow-y-auto custom-scrollbar select-none bg-[#f7f8f9]">
       <div className="w-full max-w-3xl flex flex-col items-center">
-        {/* Header Badge */}
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary-50 border border-primary-100 text-primary-600 text-xs font-medium mb-4 shadow-2xs">
-          <Sparkles className="size-3.5" />
-          <span>База знаний Портала поставщиков</span>
-        </div>
-
-        {/* Gradient Headline */}
-        <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-center mb-3 bg-gradient-to-r from-primary-500 via-primary-400 to-primary-300 bg-clip-text text-transparent">
-          Чем я могу помочь?
+        {/* B2G Headline */}
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-center mb-2 text-[#1a1a1a]">
+          Чем служба поддержки может помочь?
         </h1>
 
         {/* Subtitle */}
-        <p className="text-text-100 text-sm md:text-base text-center max-w-lg mb-8 leading-relaxed font-normal">
-          Интеллектуальный ассистент найдет точные регламенты, разъяснит правила участия в закупках и свяжет со специалистом.
+        <p className="text-[#7f8792] text-sm md:text-base text-center max-w-lg mb-8 leading-relaxed font-normal">
+          Интеллектуальный ассистент найдет точные регламенты ЕАИСТ, разъяснит правила участия в закупках и свяжет со специалистом.
         </p>
 
         {/* Centered Composer */}
@@ -96,14 +90,14 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
           />
         </div>
 
-        {/* Quick Action Chips matching TailGrids design */}
-        <div className="flex flex-wrap items-center justify-center gap-2.5 max-w-2xl">
+        {/* Quick Action Chips: Rectangular official buttons */}
+        <div className="flex flex-wrap items-center justify-center gap-2 max-w-2xl">
           {QUICK_PROMPTS.map((item) => (
             <button
               key={item.id}
               type="button"
               onClick={() => onSelectQuickPrompt(item.prompt)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-gray-200/80 bg-white hover:bg-gray-50 hover:border-gray-300 text-xs md:text-sm font-medium text-gray-700 shadow-2xs transition-all active:scale-[0.98] cursor-pointer"
+              className="flex items-center gap-2 px-4 py-2 rounded-none border border-[#22242626] bg-white hover:bg-[#f2f7fc] hover:border-[#264b82] text-xs md:text-sm font-semibold text-[#1a1a1a] transition-all cursor-pointer"
             >
               {getPromptIcon(item.id)}
               <span>{item.label}</span>

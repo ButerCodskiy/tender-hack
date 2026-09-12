@@ -443,6 +443,7 @@ class ChatService:
             moderation_status=MessageModerationStatus.PASSED,
             created_at=datetime.now(settings.TIMEZONE),
         )
+        operator_message.sender = operator
         await self.repo.save_message(operator_message)
         await self.session.commit()
 

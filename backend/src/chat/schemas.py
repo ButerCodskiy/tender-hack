@@ -87,6 +87,16 @@ class MessageResponseSchema(BaseModel):
         default=None,
         description="Идентификатор пользователя-автора сообщения",
     )
+    sender_name: str | None = Field(
+        default=None,
+        description="Отображаемое имя автора сообщения (оператора, админа или клиента)",
+        examples=["Анна Смирнова"],
+    )
+    sender_role: str | None = Field(
+        default=None,
+        description="Системная роль автора сообщения: client, operator, supervisor, admin",
+        examples=["operator"],
+    )
     text: str = Field(
         ...,
         description="Текст сообщения",

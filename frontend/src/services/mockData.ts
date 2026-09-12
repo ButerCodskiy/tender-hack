@@ -205,6 +205,8 @@ export function getMockChatState(): BackendChatState {
         id: 'mock-m-welcome',
         ticket_id: 'mock-t-100',
         sender_type: 'bot',
+        sender_name: 'ИИ-Ассистент Портала Поставщиков',
+        sender_role: 'bot',
         text: 'Здравствуйте! Я интеллектуальный ассистент службы поддержки Портала поставщиков. Задайте любой вопрос по регламенту котировочных сессий, настройке электронной подписи или исполнению контрактов.',
         created_at: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
         sources: [
@@ -252,6 +254,15 @@ export function mockEscalateTicket(): ActiveTicketSummary {
     sender_type: 'system',
     text: 'Диалог переведен на 1-ю линию поддержки. Оператор Смирнова А.С. подключилась к обращению.',
     created_at: new Date().toISOString(),
+  });
+  state.messages.push({
+    id: `mock-op-${Date.now() + 1}`,
+    ticket_id: summary.id,
+    sender_type: 'operator',
+    sender_name: 'Смирнова Анна Сергеевна',
+    sender_role: 'operator',
+    text: 'Здравствуйте! Меня зовут Анна, я специалист службы поддержки 1-й линии. Ознакомилась с контекстом вашего обращения, сейчас помогу решить проблему.',
+    created_at: new Date(Date.now() + 1000).toISOString(),
   });
 
   saveMockChatState(state);

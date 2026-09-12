@@ -378,15 +378,36 @@ export async function sendOperatorMessage(ticketId: string, text: string): Promi
   const workspaces = getLocalWorkspaces();
   const ws = workspaces[ticketId];
   if (ws) {
-    ws.messages.push({
+    const operatorMsg = {
       id: `op-msg-${Date.now()}`,
       content: text,
-      type: 'assistant',
-      sender_type: 'operator',
+      type: 'assistant' as const,
+      sender_type: 'operator' as const,
+      sender_name: 'Смирнова Анна Сергеевна',
+      sender_role: 'operator',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      actions: ['copy'],
-    });
+      actions: ['copy' as const],
+    };
+    ws.messages.push(operatorMsg);
     saveLocalWorkspaces(workspaces);
+
+    // Sync to mock client state if exists
+    try {
+      const rawMockChat = localStorage.getItem('portal_mock_chat_state');
+      if (rawMockChat) {
+        const mockChat = JSON.parse(rawMockChat);
+        mockChat.messages.push({
+          id: operatorMsg.id,
+          ticket_id: ticketId,
+          sender_type: 'operator',
+          sender_name: 'Смирнова Анна Сергеевна',
+          sender_role: 'operator',
+          text: text,
+          created_at: new Date().toISOString(),
+        });
+        localStorage.setItem('portal_mock_chat_state', JSON.stringify(mockChat));
+      }
+    } catch {}
 
     // Update last message preview
     const tickets = getLocalStoredTickets().map((t) =>

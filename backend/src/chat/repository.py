@@ -248,7 +248,10 @@ class ChatRepository:
             select(MessageModel)
             .join(TicketModel, MessageModel.ticket_id == TicketModel.id)
             .where(TicketModel.chat_id == chat_id)
-            .options(selectinload(MessageModel.sources))
+            .options(
+                selectinload(MessageModel.sources),
+                selectinload(MessageModel.sender).selectinload(UserModel.role),
+            )
             .order_by(MessageModel.created_at.desc())
             .limit(limit)
         )
@@ -262,7 +265,10 @@ class ChatRepository:
         stmt = (
             select(MessageModel)
             .where(MessageModel.ticket_id == ticket_id)
-            .options(selectinload(MessageModel.sources))
+            .options(
+                selectinload(MessageModel.sources),
+                selectinload(MessageModel.sender).selectinload(UserModel.role),
+            )
             .order_by(MessageModel.created_at.asc())
         )
         result = await self.session.scalars(stmt)
@@ -280,7 +286,10 @@ class ChatRepository:
                     MessageModel.ticket_id == ticket_id,
                     MessageModel.created_at > ref_msg.created_at,
                 )
-                .options(selectinload(MessageModel.sources))
+                .options(
+                    selectinload(MessageModel.sources),
+                    selectinload(MessageModel.sender).selectinload(UserModel.role),
+                )
                 .order_by(MessageModel.created_at.asc())
             )
         else:
@@ -290,7 +299,10 @@ class ChatRepository:
                     MessageModel.ticket_id == ticket_id,
                     MessageModel.id > last_event_id,
                 )
-                .options(selectinload(MessageModel.sources))
+                .options(
+                    selectinload(MessageModel.sources),
+                    selectinload(MessageModel.sender).selectinload(UserModel.role),
+                )
                 .order_by(MessageModel.created_at.asc())
             )
         result = await self.session.scalars(stmt)

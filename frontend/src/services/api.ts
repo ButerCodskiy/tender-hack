@@ -48,7 +48,9 @@ export interface BackendChatState {
   messages: Array<{
     id: string;
     ticket_id: string;
-    sender_type: 'client' | 'bot' | 'operator' | 'system';
+    sender_type: 'client' | 'bot' | 'operator' | 'system' | 'admin';
+    sender_name?: string | null;
+    sender_role?: string | null;
     text: string;
     created_at: string;
     sources?: Array<{
