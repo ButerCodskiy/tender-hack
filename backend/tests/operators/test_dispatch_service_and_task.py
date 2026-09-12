@@ -1,12 +1,13 @@
 """Интеграционные тесты сервиса распределения обращений и фоновой задачи Taskiq."""
 
+import uuid
 from collections.abc import AsyncGenerator
 from datetime import datetime
 
 import pytest
 import redis.asyncio as aioredis
 import uuid6
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.models import ClientProfileModel, RoleModel, UserModel
@@ -24,7 +25,7 @@ from src.core.redis_client import (
     RedisDistributedLock,
     RedisLineQueue,
 )
-from src.db.database import Base, async_session_maker, engine
+from src.db.database import async_session_maker
 from src.operators.models import (
     OperatorProfileModel,
     OperatorShiftStatus,
@@ -35,32 +36,9 @@ from src.operators.service import OperatorService
 from src.operators.tasks import dispatch_line_queue
 
 
-@pytest.fixture(autouse=True)
-async def setup_db() -> AsyncGenerator[None, None]:
-    """Очищает таблицы базы данных перед и после каждого теста."""
-    tables_to_truncate = (
-        "messages, message_sources, tickets, chats, "
-        "client_profiles, operator_profiles, support_lines, users, roles"
-    )
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        await conn.execute(
-            text(
-                f"TRUNCATE TABLE {tables_to_truncate} RESTART IDENTITY CASCADE;"
-            )
-        )
-    yield
-    async with engine.begin() as conn:
-        await conn.execute(
-            text(
-                f"TRUNCATE TABLE {tables_to_truncate} RESTART IDENTITY CASCADE;"
-            )
-        )
-
-
 @pytest.fixture
 async def session() -> AsyncGenerator[AsyncSession, None]:
-    """Предоставляет изолированную сессию базы данных."""
+    """Предоставляет сессию базы данных для взаимодействия с фоновыми задачами."""
     async with async_session_maker() as s:
         yield s
 
@@ -70,13 +48,21 @@ async def base_setup(
     session: AsyncSession,
 ) -> tuple[RoleModel, SupportLineModel, UserModel]:
     """Создает базовые роли, линию поддержки и тестового клиента."""
-    role = RoleModel(id=2, code="operator", name="Оператор поддержки")
-    client_role = RoleModel(id=1, code="client", name="Клиент")
-    session.add_all([role, client_role])
+    stmt_role = select(RoleModel).where(RoleModel.code == "operator")
+    role = (await session.scalars(stmt_role)).first()
+    if not role:
+        role = RoleModel(code="operator", name="Оператор поддержки")
+        session.add(role)
+
+    stmt_client_role = select(RoleModel).where(RoleModel.code == "client")
+    client_role = (await session.scalars(stmt_client_role)).first()
+    if not client_role:
+        client_role = RoleModel(code="client", name="Клиент")
+        session.add(client_role)
     await session.flush()
 
     line = SupportLineModel(
-        code="L1",
+        code=f"LINE_{uuid.uuid4().hex[:12]}",
         name="Первая линия",
         description="Консультации и общие вопросы",
     )
@@ -84,7 +70,7 @@ async def base_setup(
 
     client_user = UserModel(
         id=uuid6.uuid7(),
-        email="client@example.com",
+        email=f"client_{uuid.uuid4().hex[:12]}@example.com",
         password_hash="hash",
         full_name="Тестовый Заказчик",
         role_id=client_role.id,
@@ -116,9 +102,12 @@ async def create_operator(
     disconnected_at: datetime | None = None,
 ) -> OperatorProfileModel:
     """Вспомогательная функция создания пользователя-оператора и его профиля."""
+    unique_email = (
+        f"{email.split('@')[0]}_{uuid.uuid4().hex[:12]}@{email.split('@')[1]}"
+    )
     user = UserModel(
         id=uuid6.uuid7(),
-        email=email,
+        email=unique_email,
         password_hash="hash",
         full_name=name,
         role_id=role_id,

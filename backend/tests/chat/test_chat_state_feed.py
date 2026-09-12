@@ -4,9 +4,10 @@ from collections.abc import AsyncGenerator
 from datetime import datetime
 
 import pytest
+import uuid6
 from fastapi import status
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import get_db
@@ -22,39 +23,14 @@ from src.chat.models import (
 )
 from src.core.config import settings
 from src.core.security import create_access_token
-from src.db.database import Base, async_session_maker, engine
 from src.main import app
 from src.operators.models import SupportLineModel
 
 
-@pytest.fixture(autouse=True)
-async def setup_db() -> AsyncGenerator[None, None]:
-    """Гарантирует актуальную схему таблиц и очищает данные перед каждым тестом."""
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        await conn.execute(
-            text(
-                "TRUNCATE TABLE message_sources, messages, tickets, chats, "
-                "support_lines, client_profiles, users, roles "
-                "RESTART IDENTITY CASCADE;"
-            )
-        )
-    yield
-    async with engine.begin() as conn:
-        await conn.execute(
-            text(
-                "TRUNCATE TABLE message_sources, messages, tickets, chats, "
-                "support_lines, client_profiles, users, roles "
-                "RESTART IDENTITY CASCADE;"
-            )
-        )
-
-
 @pytest.fixture
-async def test_session() -> AsyncGenerator[AsyncSession, None]:
-    """Предоставляет изолированную сессию базы данных PostgreSQL."""
-    async with async_session_maker() as session:
-        yield session
+async def test_session(async_session: AsyncSession) -> AsyncSession:
+    """Предоставляет изолированную сессию базы данных PostgreSQL с откатом изменений."""
+    return async_session
 
 
 @pytest.fixture
@@ -79,12 +55,15 @@ async def client(
 @pytest.fixture
 async def client_user(test_session: AsyncSession) -> UserModel:
     """Создает тестового пользователя с ролью клиента."""
-    role = RoleModel(id=1, code="client", name="Клиент")
-    test_session.add(role)
-    await test_session.flush()
+    stmt_role = select(RoleModel).where(RoleModel.code == "client")
+    role = (await test_session.scalars(stmt_role)).first()
+    if not role:
+        role = RoleModel(code="client", name="Клиент")
+        test_session.add(role)
+        await test_session.flush()
 
     user = UserModel(
-        email="test_client@zakupki.mos.ru",
+        email=f"test_client_{uuid6.uuid7().hex[:8]}@zakupki.mos.ru",
         password_hash="fake_hash",
         full_name="Иван Клиентов",
         role_id=role.id,
@@ -190,22 +169,27 @@ async def test_get_chat_state_assigned_with_operator_and_line(
     client_user: UserModel,
     auth_headers: dict[str, str],
 ) -> None:
-    """Проверяет сводку тикета при назначенном операторе и определенной линии поддержки."""
-    operator_role = RoleModel(id=2, code="operator", name="Оператор")
-    test_session.add(operator_role)
-    await test_session.flush()
+    stmt_op_role = select(RoleModel).where(RoleModel.code == "operator")
+    operator_role = (await test_session.scalars(stmt_op_role)).first()
+    if not operator_role:
+        operator_role = RoleModel(code="operator", name="Оператор")
+        test_session.add(operator_role)
+        await test_session.flush()
 
     operator = UserModel(
-        email="operator_anna@zakupki.mos.ru",
+        email=f"operator_anna_{uuid6.uuid7().hex[:8]}@zakupki.mos.ru",
         password_hash="fake_hash",
         full_name="Анна Смирнова",
         role_id=operator_role.id,
     )
     test_session.add(operator)
 
-    line = SupportLineModel(code="L1", name="Первая линия")
-    test_session.add(line)
-    await test_session.flush()
+    stmt_line = select(SupportLineModel).where(SupportLineModel.code == "L1")
+    line = (await test_session.scalars(stmt_line)).first()
+    if not line:
+        line = SupportLineModel(code="L1", name="Первая линия")
+        test_session.add(line)
+        await test_session.flush()
 
     chat = ChatModel(client_id=client_user.id)
     test_session.add(chat)

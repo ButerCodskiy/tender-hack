@@ -242,7 +242,7 @@ class AnalyticsRepository:
                 WHERE t.assigned_operator_id IS NOT NULL
                   AND t.closed_at >= :day_start
                   AND t.closed_at <= :day_end
-                  AND (:operator_id IS NULL OR t.assigned_operator_id = :operator_id)
+                  AND (CAST(:operator_id AS UUID) IS NULL OR t.assigned_operator_id = CAST(:operator_id AS UUID))
             ),
             first_responses AS (
                 SELECT

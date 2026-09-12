@@ -1,12 +1,11 @@
 """Интеграционные тесты моделей, репозиториев и оперативного контекста Redis."""
 
-from collections.abc import AsyncGenerator
 from datetime import datetime
 
 import pytest
 import redis.asyncio as aioredis
 import uuid6
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,62 +22,49 @@ from src.chat.models import (
 from src.chat.repository import ChatRepository, TicketRepository
 from src.core.config import settings
 from src.core.redis_client import RedisChatContext
-from src.db.database import Base, async_session_maker, engine
 from src.operators.models import SupportLineModel
 
 
-@pytest.fixture(autouse=True)
-async def setup_db() -> AsyncGenerator[None, None]:
-    """Гарантирует актуальную схему таблиц и очищает данные перед каждым тестом."""
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        await conn.execute(
-            text(
-                "TRUNCATE TABLE message_sources, messages, tickets, chats, "
-                "support_lines, client_profiles, users, roles "
-                "RESTART IDENTITY CASCADE;"
-            )
-        )
-    yield
-    async with engine.begin() as conn:
-        await conn.execute(
-            text(
-                "TRUNCATE TABLE message_sources, messages, tickets, chats, "
-                "support_lines, client_profiles, users, roles "
-                "RESTART IDENTITY CASCADE;"
-            )
-        )
-
-
 @pytest.fixture
-async def session() -> AsyncGenerator[AsyncSession, None]:
-    """Предоставляет изолированную асинхронную сессию базы данных."""
-    async with async_session_maker() as s:
-        yield s
+async def session(async_session: AsyncSession) -> AsyncSession:
+    """Предоставляет изолированную асинхронную сессию базы данных с откатом изменений."""
+    return async_session
 
 
 @pytest.fixture
 async def base_context(
     session: AsyncSession,
 ) -> tuple[UserModel, ChatModel, SupportLineModel]:
-    """Создает тестовые сущности пользователя, чата и линии поддержки."""
-    role = RoleModel(id=1, code="client", name="Клиент")
-    session.add(role)
-    await session.flush()
+    """Получает или создает тестовые сущности пользователя, чата и линии поддержки."""
+    stmt_role = select(RoleModel).where(RoleModel.code == "client")
+    role = (await session.scalars(stmt_role)).first()
+    if not role:
+        role = RoleModel(code="client", name="Клиент")
+        session.add(role)
+        await session.flush()
 
-    user = UserModel(
-        email="supplier@zakupki.mos.ru",
-        password_hash="hashed_secret",
-        role_id=role.id,
+    stmt_user = select(UserModel).where(
+        UserModel.email == "supplier@zakupki.mos.ru"
     )
-    session.add(user)
-    await session.flush()
+    user = (await session.scalars(stmt_user)).first()
+    if not user:
+        user = UserModel(
+            email="supplier@zakupki.mos.ru",
+            password_hash="hashed_secret",
+            role_id=role.id,
+        )
+        session.add(user)
+        await session.flush()
+
+    stmt_line = select(SupportLineModel).where(SupportLineModel.code == "L1")
+    line = (await session.scalars(stmt_line)).first()
+    if not line:
+        line = SupportLineModel(code="L1", name="Первая линия")
+        session.add(line)
+        await session.flush()
 
     chat = ChatModel(client_id=user.id)
     session.add(chat)
-
-    line = SupportLineModel(code="L1", name="Первая линия")
-    session.add(line)
     await session.flush()
 
     return user, chat, line
