@@ -526,17 +526,34 @@ export const App: React.FC = () => {
       };
 
       setSessions((prev) =>
-        prev.map((s) =>
-          s.id === targetSessionId
-            ? {
-                ...s,
-                messages: [
-                  ...s.messages.filter((m) => m.id !== botMessageId),
-                  errorMessage,
-                ],
-              }
-            : s
-        )
+        prev.map((s) => {
+          if (s.id !== targetSessionId) return s;
+          const existingBot = s.messages.find((m) => m.id === botMessageId);
+          if (
+            existingBot &&
+            (existingBot.content ||
+              (existingBot.citations && existingBot.citations.length > 0))
+          ) {
+            return {
+              ...s,
+              messages: [
+                ...s.messages.map((m) =>
+                  m.id === botMessageId
+                    ? { ...m, isStreaming: false, needsFeedbackButtons: true }
+                    : m
+                ),
+                errorMessage,
+              ],
+            };
+          }
+          return {
+            ...s,
+            messages: [
+              ...s.messages.filter((m) => m.id !== botMessageId),
+              errorMessage,
+            ],
+          };
+        })
       );
     } finally {
       setIsSending(false);

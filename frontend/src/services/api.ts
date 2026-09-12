@@ -111,7 +111,7 @@ export async function streamChatMessage(
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 45000);
+  let timeoutId = setTimeout(() => controller.abort(), 120000);
 
   try {
     const res = await fetch('/api/v1/chat/messages', {
@@ -167,6 +167,9 @@ export async function streamChatMessage(
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
+
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(() => controller.abort(), 120000);
 
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split('\n');
@@ -283,10 +286,14 @@ export async function streamChatMessage(
       }
     }
   } catch (err: unknown) {
-    const error =
-      err instanceof Error
-        ? err
-        : new Error('Сбой сетевого подключения к серверу.');
+    const isAbort =
+      (err instanceof Error && (err.name === 'AbortError' || err.message.toLowerCase().includes('abort'))) ||
+      controller.signal.aborted;
+    const error = isAbort
+      ? new Error('Превышено время ожидания ответа от ИИ. Пожалуйста, повторите вопрос или обратитесь к специалисту поддержки.')
+      : err instanceof Error
+      ? err
+      : new Error('Сбой сетевого подключения к серверу.');
     callbacks.onError?.(error);
     throw error;
   } finally {
