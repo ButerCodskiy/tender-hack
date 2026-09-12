@@ -36,8 +36,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onCancel }) => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Form states
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('supplier@example.com');
+  const [password, setPassword] = useState('password123');
   const [fullName, setFullName] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [inn, setInn] = useState('');
@@ -114,10 +114,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onCancel }) => {
   };
 
   const handleQuickDemoLogin = async (demo: typeof DEMO_USERS[0]) => {
+    const pwd = demo.defaultPassword || 'password123';
+    setEmail(demo.email);
+    setPassword(pwd);
     setIsSubmitting(true);
     setErrorMessage(null);
     try {
-      const pwd = demo.defaultPassword || 'password123';
       const auth = await loginUser(demo.email, pwd);
       onSuccess(auth.user);
     } catch (err: unknown) {
@@ -303,6 +305,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onCancel }) => {
                   {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                 </button>
               </div>
+            </div>
+
+            <div className="p-2.5 bg-[#f0f4f9] border border-[#264b82]/20 text-[11px] text-[#264b82] flex items-center justify-between">
+              <span>Демо-доступ: <strong>{email || 'supplier@example.com'}</strong></span>
+              <span className="font-mono bg-white px-2 py-0.5 border border-[#264b82]/30 text-[#1a1a1a]">
+                пароль: {password || 'password123'}
+              </span>
             </div>
 
             <button

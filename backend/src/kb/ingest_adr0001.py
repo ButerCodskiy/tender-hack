@@ -386,25 +386,85 @@ class ChildChunker:
 
 
 class GpuEmbedder:
-    """Векторизация текстов моделью BAAI/bge-m3 на CUDA GPU."""
+    """Векторизация текстов моделью BAAI/bge-m3 на GPU (Ollama Vulkan/ROCm или PyTorch CUDA)."""
 
     def __init__(self, model_name: str = "BAAI/bge-m3"):
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        logger.info(
-            f"Инициализация GpuEmbedder: модель {model_name}, устройство: {self.device}"
+        self.model_name = model_name
+        self.use_ollama = False
+        self.ollama_url = os.getenv(
+            "OLLAMA_BASE_URL", "http://127.0.0.1:11434"
         )
-        if self.device == "cuda":
-            logger.info(f"Используемый GPU: {torch.cuda.get_device_name(0)}")
 
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModel.from_pretrained(model_name).to(self.device)
-        self.model.eval()
+        # Проверяем доступность локального Ollama с bge-m3
+        try:
+            import httpx
+
+            resp = httpx.get(f"{self.ollama_url}/api/tags", timeout=3.0)
+            if resp.status_code == 200:
+                models = [
+                    m.get("name", "") for m in resp.json().get("models", [])
+                ]
+                if any("bge-m3" in m for m in models):
+                    self.use_ollama = True
+                    logger.info(
+                        f"Инициализация GpuEmbedder: используем аппаратный бэкенд Ollama GPU ({self.ollama_url})"
+                    )
+        except Exception as e:
+            logger.debug(f"Ollama недоступен: {e}")
+
+        if not self.use_ollama:
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            logger.info(
+                f"Инициализация GpuEmbedder: модель {model_name}, устройство: {self.device}"
+            )
+            if self.device == "cuda":
+                logger.info(
+                    f"Используемый GPU: {torch.cuda.get_device_name(0)}"
+                )
+
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+            self.model = AutoModel.from_pretrained(model_name).to(self.device)
+            self.model.eval()
 
     def embed_batches(
         self, texts: list[str], batch_size: int = 32
     ) -> list[list[float]]:
         all_embeddings: list[list[float]] = []
         total = len(texts)
+
+        if self.use_ollama:
+            import httpx
+
+            with tqdm(
+                total=total,
+                desc="GPU Векторизация чанков (Ollama)",
+                unit="chunk",
+            ) as pbar:
+                for i in range(0, total, batch_size):
+                    batch_texts = texts[i : i + batch_size]
+                    try:
+                        resp = httpx.post(
+                            f"{self.ollama_url}/api/embed",
+                            json={"model": "bge-m3", "input": batch_texts},
+                            timeout=120.0,
+                        )
+                        resp.raise_for_status()
+                        embs = resp.json()["embeddings"]
+                        all_embeddings.extend(embs)
+                    except Exception as err:
+                        logger.error(
+                            f"Ошибка Ollama embed: {err}, повтор по 1 элементу..."
+                        )
+                        for single_t in batch_texts:
+                            r = httpx.post(
+                                f"{self.ollama_url}/api/embed",
+                                json={"model": "bge-m3", "input": single_t},
+                                timeout=60.0,
+                            )
+                            r.raise_for_status()
+                            all_embeddings.append(r.json()["embeddings"][0])
+                    pbar.update(len(batch_texts))
+            return all_embeddings
 
         with tqdm(
             total=total, desc="GPU Векторизация чанков", unit="chunk"
@@ -421,7 +481,6 @@ class GpuEmbedder:
 
                 with torch.no_grad():
                     outputs = self.model(**inputs)
-                    # Dense vector - нормализованный [CLS]
                     cls_embeddings = outputs.last_hidden_state[:, 0]
                     norm_embeddings = F.normalize(cls_embeddings, p=2, dim=-1)
                     batch_vectors = norm_embeddings.cpu().tolist()

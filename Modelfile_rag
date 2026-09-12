@@ -1,0 +1,5 @@
+FROM qwen3:8b-q4_K_M
+PARAMETER num_ctx 4096
+PARAMETER num_predict 1024
+PARAMETER temperature 0.2
+PARAMETER top_p 0.8

@@ -91,8 +91,8 @@ class Settings(BaseSettings):
 
     @property
     def REDIS_URL(self) -> str:
-        """Строка подключения к Redis."""
-        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
+        """Строка подключения к Redis (протокол RESP2 для совместимости)."""
+        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}?protocol=2"
 
 
 settings = Settings()

@@ -30,7 +30,25 @@ class Retriever:
         self.qdrant_client = qdrant_client or get_qdrant_client()
 
     def _encode_query(self, query: str) -> list[float]:
-        """Генерирует плотный вектор через BAAI/bge-m3 на CUDA (или CPU) с фолбэком на стаб."""
+        """Генерирует плотный вектор через BAAI/bge-m3 на GPU (Ollama/CUDA) с фолбэком на стаб."""
+        try:
+            import json
+            import urllib.request
+
+            req = urllib.request.Request(
+                "http://127.0.0.1:11434/api/embeddings",
+                data=json.dumps({"model": "bge-m3", "prompt": query}).encode(
+                    "utf-8"
+                ),
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=15.0) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                if "embedding" in data and len(data["embedding"]) == 1024:
+                    return data["embedding"]
+        except Exception as ollama_exc:
+            logger.debug("Ollama bge-m3 embeddings fallback: %s", ollama_exc)
+
         if not getattr(settings, "ENABLE_LOCAL_NEURAL_EMBEDDINGS", False):
             return self.embedding_model.generate_vectors(query)["dense"]
 
