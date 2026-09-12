@@ -207,16 +207,23 @@ async def init_knowledge_base_collection(
     collections = await client.get_collections()
     existing_names = [c.name for c in collections.collections]
 
-    if target_collection not in existing_names:
-        await client.create_collection(
-            collection_name=target_collection,
-            vectors_config={
-                "dense": VectorParams(size=1024, distance=Distance.COSINE),
-            },
-            sparse_vectors_config={
-                "sparse": SparseVectorParams(),
-            },
-        )
+    collections_to_check = {
+        target_collection,
+        "knowledge_base",
+        "tender_chunks",
+    }
+    for col in collections_to_check:
+        if col not in existing_names:
+            await client.create_collection(
+                collection_name=col,
+                vectors_config={
+                    "dense": VectorParams(size=1024, distance=Distance.COSINE),
+                },
+                sparse_vectors_config={
+                    "sparse": SparseVectorParams(),
+                },
+            )
+            existing_names.append(col)
 
 
 class HybridEmbeddingService:

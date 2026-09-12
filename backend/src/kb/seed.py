@@ -124,15 +124,27 @@ async def seed_test_regulation(
                 "kind": "chunk",
             },
         )
-        await client.upsert(
-            collection_name=settings.QDRANT_COLLECTION_NAME,
-            points=[point],
-        )
-        logger.info(
-            "Точка чанка %s сохранена в Qdrant (UUIDv5: %s)",
-            chunk.chunk_id,
-            point.id,
-        )
+        target_collections = {
+            settings.QDRANT_COLLECTION_NAME,
+            "knowledge_base",
+            "tender_chunks",
+        }
+        for target_col in target_collections:
+            try:
+                await client.upsert(
+                    collection_name=target_col,
+                    points=[point],
+                )
+                logger.info(
+                    "Точка чанка %s сохранена в Qdrant %s (UUIDv5: %s)",
+                    chunk.chunk_id,
+                    target_col,
+                    point.id,
+                )
+            except Exception as e:
+                logger.warning(
+                    "Не удалось сохранить точку в %s: %s", target_col, e
+                )
     except Exception as exc:
         logger.warning(
             "Синхронизация с Qdrant пропущена или завершилась ошибкой: %s", exc

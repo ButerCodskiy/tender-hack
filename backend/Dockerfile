@@ -18,9 +18,13 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/app/.venv/bin:$PATH"
 
-RUN groupadd -r appgroup && useradd -r -g appgroup -s /bin/false appuser
+RUN groupadd -r appgroup && useradd -r -m -g appgroup -s /bin/bash appuser
 
-RUN mkdir -p /data/kb_documents && chown -R appuser:appgroup /data
+ENV HF_HOME=/home/appuser/.cache/huggingface \
+    TRANSFORMERS_CACHE=/home/appuser/.cache/huggingface \
+    TORCH_HOME=/home/appuser/.cache/torch
+
+RUN mkdir -p /data/kb_documents /home/appuser/.cache && chown -R appuser:appgroup /data /home/appuser
 
 WORKDIR /app
 

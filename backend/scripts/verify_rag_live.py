@@ -1,6 +1,11 @@
 """Скрипт сквозной проверки RAG: гибридный поиск Qdrant + удаленный Ollama (Qwen 3.5:2b)."""
 
 import asyncio
+import sys
+from pathlib import Path
+
+# Добавляем корень backend в sys.path для прямого запуска скрипта
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.rag.schemas import (
     RagDegradedModeEventSchema,
