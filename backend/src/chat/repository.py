@@ -288,7 +288,9 @@ class ChatRepository:
                 )
                 .options(
                     selectinload(MessageModel.sources),
-                    selectinload(MessageModel.sender).selectinload(UserModel.role),
+                    selectinload(MessageModel.sender).selectinload(
+                        UserModel.role
+                    ),
                 )
                 .order_by(MessageModel.created_at.asc())
             )
@@ -301,7 +303,9 @@ class ChatRepository:
                 )
                 .options(
                     selectinload(MessageModel.sources),
-                    selectinload(MessageModel.sender).selectinload(UserModel.role),
+                    selectinload(MessageModel.sender).selectinload(
+                        UserModel.role
+                    ),
                 )
                 .order_by(MessageModel.created_at.asc())
             )

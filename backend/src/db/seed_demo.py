@@ -3,9 +3,10 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import uuid6
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 from src.analytics.models import (
     IncidentStatus,
@@ -28,6 +29,7 @@ from src.chat.models import (
 from src.core.config import settings
 from src.core.security import hash_password
 from src.db.database import async_session_maker
+from src.kb.models import KbDocumentModel
 from src.operators.models import (
     OperatorProfileModel,
     OperatorShiftStatus,
@@ -883,6 +885,44 @@ async def seed() -> None:
 
             await session.flush()
             logger.info("Успешно создано 30 демонстрационных обращений.")
+
+        # Авто-сидирование базы знаний (kb_documents, kb_nodes)
+        stmt_kb = select(func.count()).select_from(KbDocumentModel)
+        kb_docs_count = (await session.scalars(stmt_kb)).first() or 0
+        if kb_docs_count == 0:
+            logger.info(
+                "Таблица kb_documents пуста. Выполняется авто-сидирование базы знаний..."
+            )
+            sql_paths = [
+                Path("storage/kb_data.sql"),
+                Path("/app/storage/kb_data.sql"),
+                Path("../artifacts_export/kb_data.sql"),
+                Path("artifacts_export/kb_data.sql"),
+            ]
+            for sql_p in sql_paths:
+                if sql_p.exists():
+                    logger.info(
+                        "Найден дамп базы знаний: %s. Импорт...", sql_p
+                    )
+                    sql_content = sql_p.read_text(encoding="utf-8")
+                    for statement in sql_content.split(";\n"):
+                        clean_stmt = statement.strip()
+                        if (
+                            clean_stmt
+                            and not clean_stmt.startswith("--")
+                            and not clean_stmt.startswith("SET ")
+                        ):
+                            try:
+                                await session.execute(text(clean_stmt))
+                            except Exception as ex:
+                                logger.debug(
+                                    "Игнорирование ошибки вставки: %s", ex
+                                )
+                    await session.commit()
+                    logger.info(
+                        "Авто-сидирование базы знаний успешно завершено."
+                    )
+                    break
 
         await session.commit()
         logger.info("Сидирование демонстрационных данных успешно завершено.")
