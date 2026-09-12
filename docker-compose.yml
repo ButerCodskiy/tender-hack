@@ -94,7 +94,7 @@ services:
     container_name: rag_api
     ports:
       - "8000:8000"
-    command: ["sh", "-c", "alembic upgrade head && python -m src.db.seed_demo && uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload"]
+    command: ["sh", "-c", "alembic upgrade head && python -m src.db.seed_demo && python -m src.kb.seed && uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload"]
 
   worker:
     <<: *backend-base

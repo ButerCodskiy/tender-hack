@@ -225,6 +225,14 @@ class RagDegradedModeEventSchema(BaseModel):
         default_factory=list,
         description="Список найденных первоисточников для ручного изучения",
     )
+    ticket_id: UUID | None = Field(
+        default=None,
+        description="Идентификатор связанного обращения",
+    )
+    message_id: UUID | None = Field(
+        default=None,
+        description="Идентификатор сообщения бота",
+    )
 
 
 RagStreamEvent = Annotated[

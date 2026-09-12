@@ -358,6 +358,8 @@ class ChatService:
                         text=event.message,
                         timestamp=bot_message.created_at,
                     )
+                    event.ticket_id = active_ticket.id
+                    event.message_id = target_bot_id
 
                 if isinstance(event, RagDoneEventSchema):
                     event.ticket_id = active_ticket.id
@@ -375,6 +377,8 @@ class ChatService:
             degraded_event = RagDegradedModeEventSchema(
                 message=fallback_text,
                 sources=collected_sources,
+                ticket_id=active_ticket.id,
+                message_id=bot_message_id,
             )
             bot_message = MessageModel(
                 id=bot_message_id,
