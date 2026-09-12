@@ -94,15 +94,22 @@ async def seed_test_regulation(
         embedding_model_version="bge-m3",
     )
 
-    # 4. Сохранение в PostgreSQL через топологический репозиторий
-    await repo.save_full_document_tree(
-        document=document,
-        nodes=nodes,
-        chunks=[chunk],
-    )
-    logger.info(
-        "Документ %s и узлы AST успешно сохранены в PostgreSQL", doc_id
-    )
+    # 4. Сохранение в PostgreSQL через топологический репозиторий (идемпотентно)
+    existing_doc = await repo.get_document_by_id(doc_id)
+    if not existing_doc:
+        await repo.save_full_document_tree(
+            document=document,
+            nodes=nodes,
+            chunks=[chunk],
+        )
+        logger.info(
+            "Документ %s и узлы AST успешно сохранены в PostgreSQL", doc_id
+        )
+    else:
+        logger.info(
+            "Документ %s уже существует в PostgreSQL, вставка пропущена",
+            doc_id,
+        )
 
     # 5. Синхронизация с векторным индексом Qdrant (при наличии клиента)
     client = qdrant_client or get_qdrant_client()
