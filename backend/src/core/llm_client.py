@@ -40,10 +40,12 @@ class OllamaStreamClient:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt},
             ],
+            "think": False,
             "stream": True,
             "options": {
-                "temperature": 0.2,
+                "temperature": 0.3,
                 "top_p": 0.9,
+                "num_predict": -1,
             },
         }
 
@@ -52,7 +54,9 @@ class OllamaStreamClient:
 
         async with httpx.AsyncClient(timeout=timeout_config) as client:
             try:
-                async with client.stream("POST", endpoint, json=payload) as response:
+                async with client.stream(
+                    "POST", endpoint, json=payload
+                ) as response:
                     if response.status_code != 200:
                         error_body = await response.aread()
                         logger.error(
@@ -78,14 +82,61 @@ class OllamaStreamClient:
             except (httpx.ConnectError, httpx.ConnectTimeout) as err:
                 logger.error(
                     f"Не удалось подключиться к Ollama по адресу {self.base_url}: {err}. "
-                    f"Проверьте, запущен ли Ollama на RTX 4060 хосте с OLLAMA_HOST=0.0.0.0."
+                    f"Проверьте доступность GPU-сервера команды ({self.base_url})."
                 )
                 raise ConnectionError(
                     f"Ollama host unreachable at {self.base_url}"
                 ) from err
             except httpx.ReadTimeout as err:
-                logger.error(f"Превышен таймаут чтения потока Ollama ({request_timeout}s): {err}")
+                logger.error(
+                    f"Превышен таймаут чтения потока Ollama ({request_timeout}s): {err}"
+                )
                 raise TimeoutError("Ollama stream read timeout") from err
+
+    async def generate_completion(
+        self,
+        prompt: str,
+        system_prompt: str,
+        timeout: float | None = None,
+    ) -> str:
+        """Синхронная (непотоковая) генерация полного ответа модели."""
+        request_timeout = timeout or self.default_timeout
+        endpoint = f"{self.base_url}/api/chat"
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            "think": False,
+            "stream": False,
+            "options": {
+                "temperature": 0.3,
+                "top_p": 0.9,
+                "num_predict": -1,
+            },
+        }
+
+        timeout_config = httpx.Timeout(request_timeout, connect=5.0)
+        async with httpx.AsyncClient(timeout=timeout_config) as client:
+            try:
+                response = await client.post(endpoint, json=payload)
+                if response.status_code != 200:
+                    logger.error(
+                        f"Ollama API вернул статус {response.status_code}: {response.text}"
+                    )
+                    raise RuntimeError(
+                        f"Ollama API error: status {response.status_code}"
+                    )
+                data = response.json()
+                return data.get("message", {}).get("content", "")
+            except (httpx.ConnectError, httpx.ConnectTimeout) as err:
+                logger.error(
+                    f"Не удалось подключиться к Ollama по адресу {self.base_url}: {err}."
+                )
+                raise ConnectionError(
+                    f"Ollama host unreachable at {self.base_url}"
+                ) from err
 
 
 def get_llm_stream_client() -> OllamaStreamClient:

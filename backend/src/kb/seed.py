@@ -114,6 +114,9 @@ async def seed_test_regulation(
             payload={
                 "doc_id": doc_id,
                 "node_id": chunk.node_id,
+                "title": node_item41.title,
+                "section_path": node_item41.section_path,
+                "source_url": document.source_url,
                 "regime": "MOS_PORTAL",
                 "has_table": False,
                 "status": "ACTIVE",
