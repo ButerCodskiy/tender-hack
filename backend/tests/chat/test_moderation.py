@@ -352,3 +352,113 @@ async def test_send_operator_message_profane_raises(
 
     # Сообщение не должно быть сохранено
     repo.save_message.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_process_client_message_on_closed_by_moderation_ticket_sse(
+    mock_service: tuple[ChatService, AsyncMock, AsyncMock, AsyncMock],
+) -> None:
+    """Попытка отправить сообщение в обращение, закрытое модерацией, завершается session_terminated."""
+    service, repo, ticket_repo, _ = mock_service
+    user_id = uuid4()
+    chat_id = uuid4()
+    ticket_id = uuid4()
+
+    mock_chat = ChatModel(id=chat_id, client_id=user_id)
+    mock_ticket = TicketModel(
+        id=ticket_id, chat_id=chat_id, status=TicketStatus.CLOSED_BY_MODERATION
+    )
+
+    repo.get_by_client_id.return_value = mock_chat
+    ticket_repo.get_by_id.return_value = mock_ticket
+
+    payload = ClientSendMessageRequestSchema(
+        text="Здравствуйте, я исправился, ответьте пожалуйста",
+        ticket_id=ticket_id,
+    )
+    user = UserModel(
+        id=user_id, email="client@zakupki.mos.ru", full_name="Тест"
+    )
+
+    events = []
+    async for chunk in service.process_client_message(
+        payload=payload,
+        user=user,
+        accept_header="text/event-stream",
+    ):
+        events.append(chunk)
+
+    assert len(events) == 1
+    assert "event: session_terminated\n" in events[0]
+    data_line = next(
+        line for line in events[0].split("\n") if line.startswith("data: ")
+    )
+    data_json = json.loads(data_line[6:])
+    assert data_json["reason"] == "profanity"
+    assert "закрыто в связи с нарушением правил" in data_json["message"]
+
+
+@pytest.mark.asyncio
+async def test_process_client_message_on_closed_by_moderation_ticket_http(
+    mock_service: tuple[ChatService, AsyncMock, AsyncMock, AsyncMock],
+) -> None:
+    """Попытка отправить сообщение в закрытый модерацией тикет без SSE вызывает HTTPException 400."""
+    service, repo, ticket_repo, _ = mock_service
+    user_id = uuid4()
+    chat_id = uuid4()
+    ticket_id = uuid4()
+
+    mock_chat = ChatModel(id=chat_id, client_id=user_id)
+    mock_ticket = TicketModel(
+        id=ticket_id, chat_id=chat_id, status=TicketStatus.CLOSED_BY_MODERATION
+    )
+
+    repo.get_by_client_id.return_value = mock_chat
+    ticket_repo.get_by_id.return_value = mock_ticket
+
+    payload = ClientSendMessageRequestSchema(
+        text="Здравствуйте, я исправился",
+        ticket_id=ticket_id,
+    )
+    user = UserModel(
+        id=user_id, email="client@zakupki.mos.ru", full_name="Тест"
+    )
+
+    generator = service.process_client_message(
+        payload=payload,
+        user=user,
+        accept_header=None,
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await anext(generator)
+
+    assert exc_info.value.status_code == 400
+    assert "закрыто в связи с нарушением правил" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_send_operator_message_to_closed_ticket_raises(
+    mock_service: tuple[ChatService, AsyncMock, AsyncMock, AsyncMock],
+) -> None:
+    """Попытка оператора отправить сообщение в закрытый тикет вызывает HTTPException 400."""
+    service, repo, ticket_repo, _ = mock_service
+    operator = UserModel(
+        id=uuid4(), email="op@zakupki.mos.ru", full_name="Оператор"
+    )
+    ticket_id = uuid4()
+    mock_ticket = TicketModel(
+        id=ticket_id, status=TicketStatus.CLOSED_BY_MODERATION
+    )
+    ticket_repo.get_by_id.return_value = mock_ticket
+
+    with pytest.raises(HTTPException) as exc_info:
+        await service.send_operator_message(
+            ticket_id=ticket_id,
+            operator=operator,
+            text="Здравствуйте, чем могу помочь?",
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "уже завершено" in exc_info.value.detail
+    repo.save_message.assert_not_called()

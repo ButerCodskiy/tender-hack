@@ -11,10 +11,12 @@ import {
   ArrowRight,
   ShieldCheck,
   Headphones,
-  Briefcase,
   X,
+  KeyRound,
+  Cpu,
+  BarChart3,
 } from 'lucide-react';
-import { UserProfile, UserRole } from '../../types/auth';
+import { UserProfile } from '../../types/auth';
 import { loginUser, registerUser, DEMO_USERS } from '../../services/auth';
 import { isStandaloneMode, setStandaloneMode, onModeChange } from '../../config/mode';
 
@@ -133,21 +135,41 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onCancel }) => {
     }
   };
 
-  const getRoleIcon = (role: UserRole) => {
-    switch (role) {
-      case 'operator':
-        return <Headphones className="size-4 text-primary-500" />;
-      case 'supervisor':
-      case 'admin':
-        return <Briefcase className="size-4 text-amber-500" />;
-      default:
-        return <User className="size-4 text-emerald-500" />;
+  const getRoleIcon = (demo: (typeof DEMO_USERS)[0]) => {
+    if (demo.role === 'client') {
+      return <User className="size-4 text-emerald-600" />;
     }
+    if (demo.lineCode === 'L1') {
+      return <Headphones className="size-4 text-blue-600" />;
+    }
+    if (demo.lineCode === 'L2') {
+      return <KeyRound className="size-4 text-indigo-600" />;
+    }
+    if (demo.lineCode === 'L3') {
+      return <Cpu className="size-4 text-purple-600" />;
+    }
+    return <BarChart3 className="size-4 text-amber-600" />;
+  };
+
+  const getBadgeStyle = (demo: (typeof DEMO_USERS)[0]) => {
+    if (demo.role === 'client') {
+      return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    }
+    if (demo.lineCode === 'L1') {
+      return 'bg-blue-50 text-blue-700 border-blue-200';
+    }
+    if (demo.lineCode === 'L2') {
+      return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+    }
+    if (demo.lineCode === 'L3') {
+      return 'bg-purple-50 text-purple-700 border-purple-200';
+    }
+    return 'bg-amber-50 text-amber-700 border-amber-200';
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#f7f8f9] p-4 overflow-y-auto custom-scrollbar">
-      <div className="relative w-full max-w-lg bg-white rounded-none border border-[#22242626] shadow-md p-6 sm:p-8 my-8">
+      <div className="relative w-full max-w-xl bg-white rounded-none border border-[#22242626] shadow-md p-6 sm:p-8 my-8">
         {/* Close / Back button */}
         {onCancel && (
           <button
@@ -431,31 +453,46 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onCancel }) => {
 
         {/* Quick Demo Login Section */}
         <div className="mt-5 pt-4 border-t border-[#e5e5e5]">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-2.5">
             <span className="text-[11px] font-bold uppercase tracking-wider text-[#7f8792]">
-              Быстрый вход для тестирования ролей:
+              Быстрый вход для тестирования (5 профилей):
             </span>
+            <span className="text-[10px] text-[#7f8792]">Вход в 1 клик</span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            {DEMO_USERS.map((demo) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {DEMO_USERS.map((demo, idx) => (
               <button
-                key={demo.role}
+                key={demo.email}
                 type="button"
                 disabled={isSubmitting}
                 onClick={() => handleQuickDemoLogin(demo)}
-                className="flex items-center gap-2 p-2 rounded-none border border-[#22242626] hover:border-[#264b82] hover:bg-[#f2f7fc] text-left transition cursor-pointer group"
+                className={`flex items-start gap-2.5 p-2.5 rounded-none border border-[#22242626] hover:border-[#264b82] hover:bg-[#f2f7fc] text-left transition cursor-pointer group bg-white ${
+                  idx === 4 ? 'sm:col-span-2' : ''
+                }`}
               >
-                <div className="size-7 rounded-none bg-[#f7f8f9] flex items-center justify-center shrink-0 border border-[#e5e5e5]">
-                  {getRoleIcon(demo.role)}
+                <div className="size-8 rounded-none bg-[#f7f8f9] flex items-center justify-center shrink-0 border border-[#e5e5e5] mt-0.5 group-hover:border-[#264b82]/40">
+                  {getRoleIcon(demo)}
                 </div>
-                <div className="truncate">
-                  <span className="text-xs font-bold text-[#1a1a1a] block truncate group-hover:text-[#264b82]">
-                    {demo.title}
-                  </span>
-                  <span className="text-[10px] text-[#7f8792] block truncate font-mono">
-                    {demo.role}
-                  </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                    <span className="text-xs font-bold text-[#1a1a1a] group-hover:text-[#264b82]">
+                      {demo.title}
+                    </span>
+                    <span
+                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded-none border ${getBadgeStyle(
+                        demo
+                      )}`}
+                    >
+                      {demo.badge}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[#7f8792] line-clamp-1 leading-snug">
+                    {demo.description}
+                  </p>
+                  <div className="text-[10px] text-[#999999] font-mono mt-0.5 truncate">
+                    {demo.name} • {demo.email}
+                  </div>
                 </div>
               </button>
             ))}

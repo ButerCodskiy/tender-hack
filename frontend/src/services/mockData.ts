@@ -143,6 +143,27 @@ export async function simulateMockChatStream(
   content: string,
   callbacks: StreamCallbacks
 ): Promise<void> {
+  const lower = content.toLowerCase();
+  const profanityPatterns = [
+    /ху[йеяиюё]/i,
+    /пизд/i,
+    /еб[аеёиуыл]/i,
+    /бл[яе]/i,
+    /сук[аи]/i,
+    /муда[кч]/i,
+    /пидор/i,
+    /гондон/i,
+    /шлюх/i,
+  ];
+  if (profanityPatterns.some((p) => p.test(lower))) {
+    await delay(300);
+    callbacks.onSessionTerminated?.(
+      'profanity',
+      'Ваше обращение завершено в связи с нарушением правил общения (использование нецензурной лексики). Пожалуйста, сформируйте новое обращение в корректной форме.'
+    );
+    return;
+  }
+
   const answerData = findKnowledgeAnswer(content);
 
   // Шаг 1: Статус поиска
@@ -310,6 +331,7 @@ export function generateMockAuthTokens(user: Partial<UserProfile>): AuthTokens {
     full_name: user.full_name || 'Иванов Иван Иванович',
     company_name: user.company_name || 'ООО «ТехноСнаб Поставка»',
     inn: user.inn || '7701234567',
+    line_code: user.line_code,
     created_at: new Date().toISOString(),
   };
 

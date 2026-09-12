@@ -107,9 +107,10 @@ async def seed_test_regulation(
         )
     else:
         logger.info(
-            "Документ %s уже существует в PostgreSQL, пропускаем сохранение дерева",
+            "Документ %s уже существует в PostgreSQL, пропускаем сохранение дерева и Qdrant",
             doc_id,
         )
+        return
 
     # 5. Синхронизация с векторным индексом Qdrant (при наличии клиента)
     client = qdrant_client or get_qdrant_client()
@@ -160,9 +161,20 @@ async def seed_test_regulation(
 
 async def main() -> None:
     """Точка входа запуска сидинга через python -m src.kb.seed."""
-    async with async_session_maker() as session:
-        await seed_test_regulation(session=session)
+    try:
+        async with async_session_maker() as session:
+            await seed_test_regulation(session=session)
+    finally:
+        from src.db.database import engine
+
+        await engine.dispose()
+        client = get_qdrant_client()
+        if client is not None:
+            await client.close()
 
 
 if __name__ == "__main__":
+    import os
+
     asyncio.run(main())
+    os._exit(0)

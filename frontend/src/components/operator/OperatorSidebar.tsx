@@ -11,6 +11,7 @@ import {
   PowerOff,
   Radio,
   ArrowLeftRight,
+  BarChart3,
 } from 'lucide-react';
 import {
   OperatorProfile,
@@ -29,6 +30,7 @@ interface OperatorSidebarProps {
   user: UserProfile | null;
   onLogout: () => void;
   onSwitchToClientMode: () => void;
+  onSwitchToAnalyticsMode?: () => void;
 }
 
 export const OperatorSidebar: React.FC<OperatorSidebarProps> = ({
@@ -40,6 +42,7 @@ export const OperatorSidebar: React.FC<OperatorSidebarProps> = ({
   user,
   onLogout,
   onSwitchToClientMode,
+  onSwitchToAnalyticsMode,
 }) => {
   const [isShiftDropdownOpen, setIsShiftDropdownOpen] = useState(false);
   const [filterPriority, setFilterPriority] = useState<'all' | TicketPriority>('all');
@@ -116,14 +119,26 @@ export const OperatorSidebar: React.FC<OperatorSidebarProps> = ({
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={onSwitchToClientMode}
-          title="Переключиться в режим клиента (поставщика)"
-          className="p-1.5 rounded-none border border-[#22242626] text-[#7f8792] hover:text-[#264b82] hover:bg-[#f2f7fc] transition cursor-pointer"
-        >
-          <ArrowLeftRight className="size-4" />
-        </button>
+        <div className="flex items-center gap-1.5">
+          {onSwitchToAnalyticsMode && (
+            <button
+              type="button"
+              onClick={onSwitchToAnalyticsMode}
+              title="Перейти в дашборд аналитики руководителя"
+              className="p-1.5 rounded-none border border-[#22242626] text-[#7f8792] hover:text-[#004B87] hover:bg-[#eaf6ff] transition cursor-pointer"
+            >
+              <BarChart3 className="size-4" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onSwitchToClientMode}
+            title="Переключиться в режим клиента (поставщика)"
+            className="p-1.5 rounded-none border border-[#22242626] text-[#7f8792] hover:text-[#264b82] hover:bg-[#f2f7fc] transition cursor-pointer"
+          >
+            <ArrowLeftRight className="size-4" />
+          </button>
+        </div>
       </div>
 
       {/* Shift Controller Card */}
@@ -305,7 +320,13 @@ export const OperatorSidebar: React.FC<OperatorSidebarProps> = ({
                 {user?.full_name || profile.full_name}
               </span>
               <span className="text-[10px] text-[#7f8792] block truncate font-semibold">
-                Оператор первой линии
+                {user?.role_code === 'supervisor' || user?.role_code === 'admin'
+                  ? 'Администратор системы'
+                  : profile.line_code === 'L2'
+                  ? 'Оператор второй линии'
+                  : profile.line_code === 'L3'
+                  ? 'Оператор третьей линии'
+                  : 'Оператор первой линии'}
               </span>
             </div>
           </div>

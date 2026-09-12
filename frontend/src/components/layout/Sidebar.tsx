@@ -50,7 +50,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside
-      className={`relative flex flex-col bg-white border-r border-[#e5e5e5] transition-all duration-200 h-dvh select-none z-30 shrink-0 ${
+      className={`relative flex flex-col bg-white border-r border-[#e5e5e5] transition-all duration-200 h-full select-none z-30 shrink-0 ${
         isCollapsed ? 'w-16' : 'w-72'
       }`}
     >
@@ -117,7 +117,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
             }`}
           >
             <Headphones className="size-4 shrink-0 text-white" />
-            {!isCollapsed && <span>АРМ Оператора (L1)</span>}
+            {!isCollapsed && (
+              <span>
+                {user?.line_code ? `АРМ Оператора (${user.line_code})` : 'АРМ Оператора'}
+              </span>
+            )}
           </button>
         )}
       </div>
@@ -219,6 +223,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           )}
                           {session.status === 'escalated_to_operator' && (
                             <span className="size-2 rounded-full bg-[#f67319] shrink-0" title="У оператора" />
+                          )}
+                          {session.status === 'moderation_closed' && (
+                            <span className="size-2 rounded-full bg-[#d32f2f] shrink-0" title="Заблокировано модерацией" />
                           )}
                         </>
                       )}
