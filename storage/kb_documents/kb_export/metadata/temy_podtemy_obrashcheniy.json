@@ -1,0 +1,15 @@
+{
+  "filename": "Темы_подтемы_обращений.xlsx",
+  "sha256": "f5649e083b5f0c13cf346e26387064aca2c33edb9c9e7ceee1c3cc4641f5d05a",
+  "status": "success",
+  "size_bytes": 13758,
+  "doc_type": "xlsx",
+  "pages_or_sheets": 1,
+  "tables_count": 1,
+  "duration_sec": 0.03,
+  "key_used": "LOCAL_OPENPYXL",
+  "error": null,
+  "processed_at": "2026-09-11T23:05:52.180540+00:00",
+  "output_markdown": "kb_export\\markdown\\temy_podtemy_obrashcheniy.md",
+  "output_metadata": "kb_export\\metadata\\temy_podtemy_obrashcheniy.json"
+}

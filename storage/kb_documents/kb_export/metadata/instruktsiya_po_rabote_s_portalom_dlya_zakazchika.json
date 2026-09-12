@@ -1,0 +1,15 @@
+{
+  "filename": "Инструкция по работе с Порталом для заказчика.pdf",
+  "sha256": "7355b2c39b4aa4fbac758f64aeab0bdfd4a8219cc483dd5ca52e28eacb59fcde",
+  "status": "success",
+  "size_bytes": 16045058,
+  "doc_type": "pdf",
+  "pages_or_sheets": 1,
+  "tables_count": 2,
+  "duration_sec": 156.2,
+  "key_used": "llx-hM...5Qg7",
+  "error": null,
+  "processed_at": "2026-09-11T23:08:48.371266+00:00",
+  "output_markdown": "kb_export\\markdown\\instruktsiya_po_rabote_s_portalom_dlya_zakazchika.md",
+  "output_metadata": "kb_export\\metadata\\instruktsiya_po_rabote_s_portalom_dlya_zakazchika.json"
+}

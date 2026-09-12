@@ -1,0 +1,15 @@
+{
+  "filename": "Инструкция по формированию YML.pdf",
+  "sha256": "753fc58d5c7ae3b15932ef658d88f4eb2886273af2e3067389c5aa0934bd9a9c",
+  "status": "success",
+  "size_bytes": 1197287,
+  "doc_type": "pdf",
+  "pages_or_sheets": 1,
+  "tables_count": 3,
+  "duration_sec": 29.69,
+  "key_used": "llx-HR...CGoZ",
+  "error": null,
+  "processed_at": "2026-09-11T23:13:21.514804+00:00",
+  "output_markdown": "kb_export\\markdown\\instruktsiya_po_formirovaniyu_yml.md",
+  "output_metadata": "kb_export\\metadata\\instruktsiya_po_formirovaniyu_yml.json"
+}

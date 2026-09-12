@@ -1,0 +1,50 @@
+{
+  "dataset_dir": "НН 2026",
+  "out_dir": "kb_export",
+  "total_files_in_input": 7,
+  "processed_documents": 7,
+  "total_duration_sec": 0.05,
+  "key_pool_stats": {
+    "total_keys": 5,
+    "active_keys": 5,
+    "keys_detail": [
+      {
+        "masked_key": "llx-hM...5Qg7",
+        "is_exhausted": false,
+        "usage_count": 0,
+        "last_error": null,
+        "exhausted_at": null
+      },
+      {
+        "masked_key": "llx-YR...csPw",
+        "is_exhausted": false,
+        "usage_count": 0,
+        "last_error": null,
+        "exhausted_at": null
+      },
+      {
+        "masked_key": "llx-HR...CGoZ",
+        "is_exhausted": false,
+        "usage_count": 0,
+        "last_error": null,
+        "exhausted_at": null
+      },
+      {
+        "masked_key": "llx-Gi...REzw",
+        "is_exhausted": false,
+        "usage_count": 0,
+        "last_error": null,
+        "exhausted_at": null
+      },
+      {
+        "masked_key": "llx-rg...2fOe",
+        "is_exhausted": false,
+        "usage_count": 0,
+        "last_error": null,
+        "exhausted_at": null
+      }
+    ]
+  },
+  "stopped_due_to_exhaustion": false,
+  "completed_at": "2026-09-11T23:14:47.207793+00:00"
+}
