@@ -5,40 +5,76 @@ import { generateMockAuthTokens } from './mockData';
 const TOKEN_KEY = 'portal_auth_tokens';
 const USER_KEY = 'portal_auth_user';
 
-export const DEMO_USERS: {
+export interface DemoUserConfig {
   role: UserRole;
   title: string;
+  badge: string;
+  lineCode?: 'L1' | 'L2' | 'L3';
   email: string;
   name: string;
   company: string;
   inn: string;
+  description: string;
   defaultPassword?: string;
-}[] = [
+}
+
+export const DEMO_USERS: DemoUserConfig[] = [
   {
     role: 'client',
-    title: 'Поставщик (Клиент)',
+    title: 'Поставщик',
+    badge: 'Клиент',
     email: 'supplier@example.com',
     name: 'Иванов Иван Иванович',
     company: 'ООО «ТехноСнаб Поставка»',
     inn: '7701234567',
+    description: 'Подача оферт, котировочные сессии и чат с ИИ/поддержкой',
     defaultPassword: 'password123',
   },
   {
     role: 'operator',
-    title: 'Оператор 1-й линии',
+    title: 'Оператор L1',
+    badge: '1-я линия',
+    lineCode: 'L1',
     email: 'operator1@example.com',
     name: 'Смирнова Анна Сергеевна',
-    company: 'Служба технической поддержки',
+    company: 'Первая линия поддержки',
+    inn: '7709876541',
+    description: 'Регламенты закупок, классификатор СПГЗ, выгрузка YML-прайсов',
+    defaultPassword: 'password123',
+  },
+  {
+    role: 'operator',
+    title: 'Оператор L2',
+    badge: '2-я линия',
+    lineCode: 'L2',
+    email: 'operator2@example.com',
+    name: 'Кузнецов Петр Васильевич',
+    company: 'Вторая линия поддержки',
+    inn: '7709876542',
+    description: 'КриптоПро CSP, ошибки ЭЦП, валидация УПД и шлюзы ЭДО',
+    defaultPassword: 'password123',
+  },
+  {
+    role: 'operator',
+    title: 'Оператор L3',
+    badge: '3-я линия',
+    lineCode: 'L3',
+    email: 'operator3@example.com',
+    name: 'Соколова Елена Дмитриевна',
+    company: 'Третья линия (DevOps)',
     inn: '7709876543',
+    description: 'Инфраструктурные инциденты, сбои очередей и исправление багов',
     defaultPassword: 'password123',
   },
   {
     role: 'supervisor',
-    title: 'Руководитель поддержки',
+    title: 'Администратор',
+    badge: 'Супервизор',
     email: 'admin@example.com',
     name: 'Ковалев Михаил Петрович',
-    company: 'Контроль качества сервиса',
+    company: 'Служба контроля качества',
     inn: '7705554433',
+    description: 'Аналитический дашборд, мониторинг SLA, аудит и инциденты',
     defaultPassword: 'password123',
   },
 ];
@@ -127,6 +163,7 @@ export async function loginUser(
       full_name: demo ? demo.name : email.split('@')[0],
       company_name: demo ? demo.company : 'ООО «Поставка»',
       inn: demo ? demo.inn : '7701234567',
+      line_code: demo?.lineCode,
     });
     setStoredAuth(tokens);
     return tokens;

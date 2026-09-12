@@ -18,15 +18,15 @@ import {
   submitFeedback,
   subscribeChatEvents,
 } from './services/api';
-import { getStoredUser, clearStoredAuth, fetchCurrentUser, DEMO_USERS } from './services/auth';
+import { getStoredUser, clearStoredAuth, fetchCurrentUser } from './services/auth';
 import { isStandaloneMode, setStandaloneMode, onModeChange } from './config/mode';
 import {
   Sparkles,
   ShieldCheck,
   Headphones,
   UserCheck,
-  BarChart3,
-  MessageSquare,
+  AlertTriangle,
+  Plus,
 } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -62,11 +62,17 @@ export const App: React.FC = () => {
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId) || null;
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({
+        top: messagesContainerRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
   };
 
   useEffect(() => {
@@ -129,6 +135,7 @@ export const App: React.FC = () => {
                 ? 'ИИ-Ассистент Портала Поставщиков'
                 : undefined);
 
+            const isBlocked = (m as any).moderation_status === 'blocked';
             const frontendMsg: Message = {
               id: m.id,
               ticket_id: tId,
@@ -142,12 +149,17 @@ export const App: React.FC = () => {
               sender_type: m.sender_type,
               sender_name: senderName,
               sender_role: m.sender_role || m.sender_type,
+              moderation_status: (m as any).moderation_status,
+              moderation_reason: (m as any).moderation_reason,
+              ticket_status: (m as any).ticket_status,
               timestamp: new Date(m.created_at).toLocaleTimeString([], {
                 hour: '2-digit',
                 minute: '2-digit',
               }),
               actions:
-                m.sender_type === 'client'
+                isBlocked
+                  ? ['copy']
+                  : m.sender_type === 'client'
                   ? ['copy', 'edit']
                   : m.sender_type === 'bot'
                   ? ['copy', 'regenerate', 'thumbs_up', 'thumbs_down']
@@ -180,7 +192,19 @@ export const App: React.FC = () => {
               : 'Консультация по регламенту';
 
             const isActive = state.active_ticket && tId === state.active_ticket.id;
-            const status = isActive
+            const isModerationClosed =
+              msgs.some(
+                (m) =>
+                  m.moderation_status === 'blocked' ||
+                  m.ticket_status === 'closed_by_moderation'
+              ) ||
+              (state.active_ticket &&
+                tId === state.active_ticket.id &&
+                state.active_ticket.status === 'closed_by_moderation');
+
+            const status = isModerationClosed
+              ? 'moderation_closed'
+              : isActive
               ? state.active_ticket?.status === 'resolved'
                 ? 'resolved'
                 : state.active_ticket?.status === 'in_progress' ||
@@ -315,6 +339,41 @@ export const App: React.FC = () => {
           )
         );
         setIsCsatModalOpen(true);
+      } else if (event === 'session_terminated') {
+        const targetTicketId = data.ticket_id || activeTicketId;
+        setSessions((prev) =>
+          prev.map((s) => {
+            if (targetTicketId && s.id !== targetTicketId) return s;
+            const alreadyHasModerationNotice = s.messages.some(
+              (m) =>
+                m.content.includes('нарушением правил') ||
+                m.content.includes('нецензурной лексики')
+            );
+            if (alreadyHasModerationNotice) {
+              return {
+                ...s,
+                status: 'moderation_closed',
+              };
+            }
+            const termMessage: Message = {
+              id: `term-${Date.now()}`,
+              ticket_id: targetTicketId || undefined,
+              content:
+                data.message ||
+                'Ваше обращение завершено в связи с нарушением правил общения (использование нецензурной лексики). Пожалуйста, сформируйте новое обращение в корректной форме.',
+              type: 'system',
+              sender_type: 'system',
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              actions: [],
+            };
+            return {
+              ...s,
+              status: 'moderation_closed',
+              messages: [...s.messages, termMessage],
+            };
+          })
+        );
+        setActiveTicketId(null);
       }
     });
 
@@ -330,6 +389,11 @@ export const App: React.FC = () => {
   };
 
   const handleSend = async (customPrompt?: string) => {
+    const currentSession = sessions.find((s) => s.id === activeSessionId);
+    if (currentSession?.status === 'moderation_closed') {
+      return;
+    }
+
     const textToSend = (customPrompt || inputValue).trim();
     if (!textToSend || isSending) return;
 
@@ -481,22 +545,48 @@ export const App: React.FC = () => {
             setSessions((prev) =>
               prev.map((s) => {
                 if (s.id !== targetSessionId) return s;
+                const alreadyHasModerationNotice = s.messages.some(
+                  (m) =>
+                    m.content.includes('нарушением правил') ||
+                    m.content.includes('нецензурной лексики')
+                );
+                const cleanedMessages = s.messages
+                  .filter((m) => m.id !== botMessageId)
+                  .map((m) =>
+                    m.id === userMessage.id
+                      ? {
+                          ...m,
+                          moderation_status: 'blocked' as const,
+                          moderation_reason: 'profanity',
+                          actions: ['copy' as const],
+                        }
+                      : m
+                  );
+                if (alreadyHasModerationNotice) {
+                  return {
+                    ...s,
+                    status: 'moderation_closed',
+                    messages: cleanedMessages,
+                  };
+                }
+                const modMessage: Message = {
+                  id: `mod-${Date.now()}`,
+                  content:
+                    message ||
+                    'Ваше обращение завершено в связи с нарушением правил общения (использование нецензурной лексики). Пожалуйста, сформируйте новое обращение в корректной форме.',
+                  type: 'system',
+                  sender_type: 'system',
+                  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  actions: [],
+                };
                 return {
                   ...s,
                   status: 'moderation_closed',
-                  messages: [
-                    ...s.messages.filter((m) => m.id !== botMessageId),
-                    {
-                      id: `mod-${Date.now()}`,
-                      content: message || 'Обращение закрыто по правилам регламента.',
-                      type: 'system',
-                      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                      actions: [],
-                    },
-                  ],
+                  messages: [...cleanedMessages, modMessage],
                 };
               })
             );
+            setActiveTicketId(null);
             setIsSending(false);
           },
         }
@@ -514,10 +604,20 @@ export const App: React.FC = () => {
         setUser(null);
       }
 
+      const isModerationErr =
+        errMsg.includes('нарушением правил') ||
+        errMsg.includes('нецензурной') ||
+        errMsg.includes('модерац');
+
+      if (isModerationErr) {
+        setActiveTicketId(null);
+      }
+
       const errorMessage: Message = {
         id: `err-${Date.now()}`,
         content: errMsg,
         type: 'system',
+        sender_type: 'system',
         timestamp: new Date().toLocaleTimeString([], {
           hour: '2-digit',
           minute: '2-digit',
@@ -528,6 +628,41 @@ export const App: React.FC = () => {
       setSessions((prev) =>
         prev.map((s) => {
           if (s.id !== targetSessionId) return s;
+
+          if (isModerationErr) {
+            const alreadyHasModerationNotice = s.messages.some(
+              (m) =>
+                m.content.includes('нарушением правил') ||
+                m.content.includes('нецензурной лексики')
+            );
+            const cleanedMessages = s.messages
+              .filter((m) => m.id !== botMessageId)
+              .map((m) =>
+                m.id === userMessage.id
+                  ? {
+                      ...m,
+                      moderation_status: 'blocked' as const,
+                      moderation_reason: 'profanity',
+                      actions: ['copy' as const],
+                    }
+                  : m
+              );
+
+            if (alreadyHasModerationNotice) {
+              return {
+                ...s,
+                status: 'moderation_closed',
+                messages: cleanedMessages,
+              };
+            }
+
+            return {
+              ...s,
+              status: 'moderation_closed',
+              messages: [...cleanedMessages, errorMessage],
+            };
+          }
+
           const existingBot = s.messages.find((m) => m.id === botMessageId);
           if (
             existingBot &&
@@ -546,6 +681,7 @@ export const App: React.FC = () => {
               ],
             };
           }
+
           return {
             ...s,
             messages: [
@@ -653,178 +789,59 @@ export const App: React.FC = () => {
     handleSend(newContent);
   };
 
-  const handleQuickSwitchRole = (mode: 'client' | 'operator' | 'analytics') => {
-    setViewMode(mode);
-    if (!user) {
-      const demoRole = mode === 'analytics' ? 'supervisor' : mode === 'operator' ? 'operator' : 'client';
-      const demoUser = DEMO_USERS.find((u) => u.role === demoRole);
-      if (demoUser) {
-        const dummyProfile: UserProfile = {
-          id: `demo-${demoUser.role}`,
-          role_code: demoUser.role,
-          email: demoUser.email,
-          full_name: demoUser.name,
-          company_name: demoUser.company,
-          inn: demoUser.inn,
-        };
-        setUser(dummyProfile);
-        try {
-          localStorage.setItem('portal_auth_user', JSON.stringify(dummyProfile));
-        } catch {}
-      }
-    }
+  const handleLogout = () => {
+    clearStoredAuth();
+    setUser(null);
+    setViewMode('client');
   };
-
-  const renderDemoHeader = () => (
-    <header className="bg-[#002b54] text-white px-3 sm:px-6 py-2 flex items-center justify-between border-b border-[#003870] shadow-sm shrink-0 z-40 select-none">
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2">
-          <span className="bg-[#db2b21] text-white text-[10px] font-black px-1.5 py-0.5 uppercase tracking-wider">
-            ЕАИСТ
-          </span>
-          <span className="font-bold text-xs tracking-tight text-white hidden md:inline">
-            Портал Поставщиков Москвы
-          </span>
-        </div>
-        <span className="text-white/30 hidden sm:inline">•</span>
-        <span className="text-[11px] font-medium text-white/70 hidden lg:inline">
-          АРМ Техподдержки
-        </span>
-      </div>
-
-      {/* Role / View Mode Switcher */}
-      <nav className="flex items-center bg-[#001c38] p-1 rounded-sm border border-[#004B87]/60 gap-1 shadow-inner">
-        <button
-          type="button"
-          onClick={() => handleQuickSwitchRole('client')}
-          className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-sm transition cursor-pointer ${
-            viewMode === 'client'
-              ? 'bg-[#004B87] text-white shadow-sm ring-1 ring-white/20'
-              : 'text-white/70 hover:text-white hover:bg-white/10'
-          }`}
-          title="Интерфейс пользователя / поставщика (Чат с ботом и эскалация)"
-        >
-          <MessageSquare className="size-3.5 text-white/90" />
-          <span>Клиент</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleQuickSwitchRole('operator')}
-          className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-sm transition cursor-pointer ${
-            viewMode === 'operator'
-              ? 'bg-[#004B87] text-white shadow-sm ring-1 ring-white/20'
-              : 'text-white/70 hover:text-white hover:bg-white/10'
-          }`}
-          title="Рабочее место оператора L2 с AI Copilot"
-        >
-          <Headphones className="size-3.5 text-white/90" />
-          <span>Оператор L2</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleQuickSwitchRole('analytics')}
-          className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-sm transition cursor-pointer ${
-            viewMode === 'analytics'
-              ? 'bg-[#004B87] text-white shadow-sm ring-1 ring-white/20'
-              : 'text-white/70 hover:text-white hover:bg-white/10'
-          }`}
-          title="Дашборд руководителя, Adjusted CSAT и инциденты"
-        >
-          <BarChart3 className="size-3.5 text-white/90" />
-          <span>Дашборд руководителя</span>
-        </button>
-      </nav>
-
-      {/* Right controls: API toggle & current user */}
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => setStandaloneMode(!standalone)}
-          title={
-            standalone
-              ? 'Автономный режим (UI Mock). Кликните для переключения на бэкенд API.'
-              : 'Режим связи с бэкендом (API). Кликните для переключения в Демо.'
-          }
-          className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[10px] font-bold border transition cursor-pointer hover:opacity-90 ${
-            standalone
-              ? 'bg-[#eaf6ff] text-[#264b82] border-[#264b82]/40'
-              : 'bg-[#e7f8f2] text-[#0d9b68] border-[#0d9b68]/40'
-          }`}
-        >
-          <span
-            className={`size-1.5 rounded-full ${
-              standalone ? 'bg-[#264b82]' : 'bg-[#0d9b68]'
-            }`}
-          />
-          <span>{standalone ? 'Автономный' : 'API'}</span>
-        </button>
-
-        {user && (
-          <div className="hidden xl:flex items-center gap-2 text-xs text-white/80">
-            <span className="size-2 rounded-full bg-[#0d9b68]" />
-            <span className="truncate max-w-[150px] font-medium">
-              {user.full_name || user.email}
-            </span>
-          </div>
-        )}
-      </div>
-    </header>
-  );
 
   // Обязательный экран авторизации для неавторизованных посетителей
   if (!user) {
     return (
-      <div className="h-dvh w-full flex flex-col overflow-hidden bg-[#f7f8f9]">
-        {renderDemoHeader()}
-        <div className="flex-1 overflow-hidden">
-          <AuthPage
-            onSuccess={(authedUser) => {
-              setUser(authedUser);
-              if (authedUser.role_code === 'supervisor') {
-                setViewMode('analytics');
-              } else if (
-                authedUser.role_code === 'operator' ||
-                authedUser.role_code === 'admin'
-              ) {
-                setViewMode('operator');
-              } else {
-                setViewMode('client');
-              }
-            }}
-          />
-        </div>
+      <div className="h-dvh w-full overflow-hidden bg-[#f7f8f9]">
+        <AuthPage
+          onSuccess={(authedUser) => {
+            setUser(authedUser);
+            if (authedUser.role_code === 'supervisor') {
+              setViewMode('analytics');
+            } else if (
+              authedUser.role_code === 'operator' ||
+              authedUser.role_code === 'admin'
+            ) {
+              setViewMode('operator');
+            } else {
+              setViewMode('client');
+            }
+          }}
+        />
       </div>
     );
   }
 
   if (viewMode === 'analytics') {
     return (
-      <div className="h-dvh w-full flex flex-col overflow-hidden bg-[#F5F6F8]">
-        {renderDemoHeader()}
-        <div className="flex-1 overflow-hidden">
-          <SupervisorDashboard onBackToOperator={() => setViewMode('operator')} />
-        </div>
+      <div className="h-dvh w-full overflow-hidden bg-[#F5F6F8]">
+        <SupervisorDashboard
+          onLogout={handleLogout}
+          onBackToOperator={() => setViewMode('operator')}
+        />
       </div>
     );
   }
 
   if (viewMode === 'operator') {
     return (
-      <div className="h-dvh w-full flex flex-col overflow-hidden">
-        {renderDemoHeader()}
-        <div className="flex-1 overflow-hidden">
-          <OperatorWorkspace
-            user={user}
-            onLogout={() => {
-              clearStoredAuth();
-              setUser(null);
-              setViewMode('client');
-            }}
-            onSwitchToClientMode={() => setViewMode('client')}
-          />
-        </div>
+      <div className="h-dvh w-full overflow-hidden bg-white">
+        <OperatorWorkspace
+          user={user}
+          onLogout={handleLogout}
+          onSwitchToClientMode={() => setViewMode('client')}
+          onSwitchToAnalyticsMode={
+            user?.role_code === 'supervisor' || user?.role_code === 'admin'
+              ? () => setViewMode('analytics')
+              : undefined
+          }
+        />
         {isAuthOpen && (
           <AuthPage
             onSuccess={(authedUser) => {
@@ -846,37 +863,32 @@ export const App: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-dvh w-full bg-[#f7f8f9] text-[#1a1a1a] font-sans overflow-hidden">
-      {renderDemoHeader()}
-      <div className="flex flex-1 h-[calc(100%-41px)] overflow-hidden">
-        {/* Collapsible Sidebar */}
-        <Sidebar
-          isCollapsed={isCollapsed}
-          onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
-          sessions={sessions}
-          activeSessionId={activeSessionId}
-          onSelectSession={(id) => {
-            setActiveSessionId(id);
-            setActiveTicketId(id);
-          }}
-          onNewChat={handleNewChat}
-          onOpenSearch={() => setIsSearchModalOpen(true)}
-          user={user}
-          onOpenAuth={() => setIsAuthOpen(true)}
-          onLogout={() => {
-            clearStoredAuth();
-            setUser(null);
-          }}
-          onSwitchToOperatorMode={
-            user?.role_code === 'operator' || user?.role_code === 'supervisor' || user?.role_code === 'admin'
-              ? () => setViewMode('operator')
-              : undefined
-          }
-        />
+    <div className="flex h-dvh w-full bg-[#f7f8f9] text-[#1a1a1a] font-sans overflow-hidden">
+      {/* Collapsible Sidebar */}
+      <Sidebar
+        isCollapsed={isCollapsed}
+        onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        onSelectSession={(id) => {
+          setActiveSessionId(id);
+          setActiveTicketId(id);
+        }}
+        onNewChat={handleNewChat}
+        onOpenSearch={() => setIsSearchModalOpen(true)}
+        user={user}
+        onOpenAuth={() => setIsAuthOpen(true)}
+        onLogout={handleLogout}
+        onSwitchToOperatorMode={
+          user?.role_code === 'operator' || user?.role_code === 'supervisor' || user?.role_code === 'admin'
+            ? () => setViewMode('operator')
+            : undefined
+        }
+      />
 
       {/* Main Workspace Container */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden p-0 md:p-2 bg-[#f7f8f9]">
-        <div className="flex-1 flex flex-col bg-white rounded-none border border-[#e5e5e5] overflow-hidden relative shadow-none">
+      <main className="flex-1 flex flex-col h-full min-h-0 overflow-hidden p-0 md:p-2 bg-[#f7f8f9]">
+        <div className="flex-1 min-h-0 flex flex-col bg-white rounded-none border border-[#e5e5e5] overflow-hidden relative shadow-none">
           {/* Top Bar for active chat */}
           {activeSession && (
             <header className="px-5 py-3 border-b border-[#e5e5e5] flex items-center justify-between shrink-0 bg-white z-10">
@@ -890,12 +902,21 @@ export const App: React.FC = () => {
                   </h2>
                   <div className="flex items-center gap-2 text-xs text-[#7f8792]">
                     <span className="flex items-center gap-1 font-medium">
-                      <ShieldCheck className="size-3 text-[#0d9b68]" />
-                      {activeSession.status === 'resolved'
-                        ? 'Вопрос решен'
-                        : activeSession.status === 'escalated_to_operator'
-                        ? 'На линии оператора'
-                        : 'ИИ-Консультация активна'}
+                      {activeSession.status === 'moderation_closed' ? (
+                        <>
+                          <AlertTriangle className="size-3 text-[#c62828]" />
+                          <span className="text-[#c62828] font-bold">Диалог закрыт модерацией</span>
+                        </>
+                      ) : (
+                        <>
+                          <ShieldCheck className="size-3 text-[#0d9b68]" />
+                          {activeSession.status === 'resolved'
+                            ? 'Вопрос решен'
+                            : activeSession.status === 'escalated_to_operator'
+                            ? 'На линии оператора'
+                            : 'ИИ-Консультация активна'}
+                        </>
+                      )}
                     </span>
                     <span>•</span>
                     <span>{activeSession.messages.length} сообщений</span>
@@ -981,7 +1002,7 @@ export const App: React.FC = () => {
           ) : (
             <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#f7f8f9]">
               {/* Messages Scroll Area */}
-              <div className="flex-1 overflow-y-auto px-4 md:px-8 py-5 custom-scrollbar space-y-3">
+              <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-4 md:px-8 py-5 custom-scrollbar space-y-3">
                 <div className="w-full max-w-4xl mx-auto space-y-3 min-w-0">
                   {activeSession.messages.map((message) => (
                     <ChatMessage
@@ -992,27 +1013,51 @@ export const App: React.FC = () => {
                       onResolveTicket={handleResolveTicket}
                       onEscalateToOperator={handleEscalateToOperator}
                       isEscalated={activeSession.status === 'escalated_to_operator'}
+                      isModerationClosed={activeSession.status === 'moderation_closed'}
                     />
                   ))}
                   <div ref={messagesEndRef} />
                 </div>
               </div>
 
-              {/* Sticky Bottom Composer */}
-              <div className="p-3 border-t border-[#e5e5e5] bg-white">
-                <ChatComposer
-                  variant="bottom"
-                  inputValue={inputValue}
-                  onInputChange={setInputValue}
-                  onSend={() => handleSend()}
-                  isSending={isSending}
-                />
-              </div>
+              {/* Sticky Bottom Composer OR Moderation Closed Notice */}
+              {activeSession.status === 'moderation_closed' ? (
+                <div className="p-4 border-t border-[#ffcdd2] bg-[#fff5f5] flex flex-col sm:flex-row items-center justify-between gap-4 text-[#c62828] shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="size-9 rounded-none bg-[#ffebee] border border-[#ffcdd2] flex items-center justify-center shrink-0">
+                      <AlertTriangle className="size-5 text-[#c62828]" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-[#c62828]">Диалог закрыт модерацией</p>
+                      <p className="text-xs text-[#555555] mt-0.5">
+                        В переписке была зафиксирована ненормативная лексика. Чат закрыт, ввод сообщений заблокирован.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleNewChat}
+                    className="shrink-0 px-4 py-2 bg-[#c62828] hover:bg-[#b71c1c] text-white text-xs font-bold rounded-none transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                  >
+                    <Plus className="size-4" />
+                    Начать новый диалог
+                  </button>
+                </div>
+              ) : (
+                <div className="p-3 border-t border-[#e5e5e5] bg-white">
+                  <ChatComposer
+                    variant="bottom"
+                    inputValue={inputValue}
+                    onInputChange={setInputValue}
+                    onSend={() => handleSend()}
+                    isSending={isSending}
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>
       </main>
-      </div>
 
       {/* CSAT Modal */}
       <CsatModal

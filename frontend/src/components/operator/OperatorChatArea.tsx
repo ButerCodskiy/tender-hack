@@ -12,6 +12,7 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { OperatorTicketWorkspace, TicketPriority } from '../../types/operator';
+import { MarkdownView } from '../common/MarkdownView';
 
 interface OperatorChatAreaProps {
   workspace: OperatorTicketWorkspace | null;
@@ -198,7 +199,7 @@ export const OperatorChatArea: React.FC<OperatorChatAreaProps> = ({
                     <span className="text-[10px] text-[#7f8792] font-mono">{msg.timestamp}</span>
                   </div>
                   <div className="p-3.5 rounded-none bg-[#eaf6ff] border border-[#b9dbf7] text-xs md:text-[13px] text-[#1a1a1a] leading-relaxed break-words [overflow-wrap:anywhere]">
-                    {msg.content}
+                    <MarkdownView content={msg.content} />
                   </div>
                 </div>
               </div>
@@ -223,7 +224,7 @@ export const OperatorChatArea: React.FC<OperatorChatAreaProps> = ({
                     <span className="text-[10px] text-[#7f8792] font-mono">{msg.timestamp}</span>
                   </div>
                   <div className="p-3.5 rounded-none bg-white border border-[#e5e5e5] border-l-4 border-l-[#6b21a8] text-xs md:text-[13px] text-[#1a1a1a] leading-relaxed break-words [overflow-wrap:anywhere]">
-                    {msg.content}
+                    <MarkdownView content={msg.content} />
                   </div>
                 </div>
               </div>
@@ -245,7 +246,7 @@ export const OperatorChatArea: React.FC<OperatorChatAreaProps> = ({
                     <span className="text-[10px] text-[#7f8792] font-mono">{msg.timestamp}</span>
                   </div>
                   <div className="p-3.5 rounded-none bg-white border border-[#e5e5e5] text-xs md:text-[13px] text-[#1a1a1a] leading-relaxed break-words [overflow-wrap:anywhere]">
-                    {msg.content}
+                    <MarkdownView content={msg.content} />
                   </div>
                 </div>
               </div>
@@ -267,7 +268,10 @@ export const OperatorChatArea: React.FC<OperatorChatAreaProps> = ({
                     </span>
                   </div>
                   <div className="p-3.5 rounded-none bg-[#264b82] text-white text-xs md:text-[13px] leading-relaxed text-left break-words [overflow-wrap:anywhere]">
-                    {msg.content}
+                    <MarkdownView
+                      content={msg.content}
+                      className="text-white [&_*]:text-white [&_a]:text-[#b9dbf7] [&_code]:bg-[#1c3f72] [&_code]:text-white [&_pre]:bg-[#1c3f72] [&_pre]:border-[#3b669f] [&_table]:text-white [&_th]:bg-[#1c3f72] [&_th]:border-[#3b669f] [&_td]:border-[#3b669f]"
+                    />
                   </div>
                 </div>
               </div>

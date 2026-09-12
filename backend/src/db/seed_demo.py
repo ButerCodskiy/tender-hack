@@ -34,6 +34,7 @@ from src.operators.models import (
     OperatorProfileModel,
     OperatorShiftStatus,
     SupportLineModel,
+    TicketCopilotSummaryModel,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -208,6 +209,7 @@ async def seed() -> None:
         ]
 
         operator: UserModel | None = None
+        operators_by_line: dict[str, UserModel] = {}
         for op_email, op_name, line_code, slots in operators_data:
             stmt_op = select(UserModel).where(UserModel.email == op_email)
             op_user = (await session.scalars(stmt_op)).first()
@@ -244,6 +246,7 @@ async def seed() -> None:
                     op_profile.line_id = lines[line_code].id
                     op_profile.shift_status = OperatorShiftStatus.ACTIVE
 
+            operators_by_line[line_code] = op_user
             if op_email == "operator1@example.com":
                 operator = op_user
 
@@ -885,6 +888,145 @@ async def seed() -> None:
 
             await session.flush()
             logger.info("Успешно создано 30 демонстрационных обращений.")
+
+        # Сидирование активных тикетов для операторов L1, L2, L3 в АРМ (если их нет)
+        stmt_active_count = select(func.count(TicketModel.id)).where(
+            TicketModel.status.in_(
+                [TicketStatus.ASSIGNED.value, TicketStatus.IN_PROGRESS.value]
+            )
+        )
+        active_tickets_count = (await session.scalar(stmt_active_count)) or 0
+        if active_tickets_count == 0:
+            logger.info(
+                "Генерация активных демонстрационных тикетов для АРМ Операторов L1, L2, L3..."
+            )
+            now_dt = datetime.now(settings.TIMEZONE)
+            active_scenarios = [
+                # L1 - Регламенты и каталог
+                {
+                    "line": "L1",
+                    "operator": operators_by_line.get("L1"),
+                    "status": TicketStatus.IN_PROGRESS.value,
+                    "priority": TicketPriority.P1.value,
+                    "query": "Не подгружается машиночитаемая доверенность (МЧД) из реестра ФНС. Пишет «Доверенность не найдена или не активна».",
+                    "bot_reply": "Проверьте статус регистрации доверенности в распределенном реестре ФНС России.",
+                    "summary": "Проблема синхронизации машиночитаемой доверенности (МЧД) версии 003 из распределенного реестра ФНС.",
+                    "suggested_response": "Здравствуйте! Проверили статус доверенности в распределенном реестре ФНС. Для успешной привязки МЧД в личном кабинете Портала поставщиков убедитесь, что в профиле сотрудника указан СНИЛС, совпадающий с доверенностью.",
+                },
+                {
+                    "line": "L1",
+                    "operator": operators_by_line.get("L1"),
+                    "status": TicketStatus.ASSIGNED.value,
+                    "priority": TicketPriority.P2.value,
+                    "query": "Ошибка импорта YML: тег <param name='Цвет'> не проходит валидацию на строке 48. Как загрузить оферты в каталог?",
+                    "bot_reply": "Согласно регламенту ведения каталога СТЕ, тег <param> должен содержать обязательный атрибут unit или присутствовать в классификаторе.",
+                    "summary": "Ошибка импорта каталога YML: тег <param name='Цвет'> не проходит валидацию на строке 48.",
+                    "suggested_response": "Здравствуйте! В категории 'Канцтовары' параметр 'Цвет' требует выбора предопределенного значения из классификатора Портала.",
+                },
+                # L2 - ЭЦП и технические сбои
+                {
+                    "line": "L2",
+                    "operator": operators_by_line.get("L2"),
+                    "status": TicketStatus.IN_PROGRESS.value,
+                    "priority": TicketPriority.P0.value,
+                    "query": "Срочно! Идет котировочная сессия КС-9482, ошибка КриптоПро 0x80090016: Набор ключей не существует.",
+                    "bot_reply": "Ошибка 0x80090016 указывает на невозможность считывания закрытого ключа. Переподключите USB-токен.",
+                    "summary": "Критический сбой плагина КриптоПро 0x80090016 при подписании оферты котировочной сессии КС-9482.",
+                    "suggested_response": "Здравствуйте! Переподключите USB-токен Рутокен, перезапустите службу 'КриптоПро CSP' и убедитесь, что установлены корневые сертификаты УЦ ФНС.",
+                },
+                {
+                    "line": "L2",
+                    "operator": operators_by_line.get("L2"),
+                    "status": TicketStatus.ASSIGNED.value,
+                    "priority": TicketPriority.P1.value,
+                    "query": "Не могу прикрепить УПД к исполненному контракту №9923/26. Выдает ошибку формата по приказу 820.",
+                    "bot_reply": "Портал принимает закрывающие документы строго в формате приказа ФНС России № ММВ-7-15/820@.",
+                    "summary": "Ошибка валидации схемы XML универсального передаточного документа (УПД) по приказу ФНС 820.",
+                    "suggested_response": "Здравствуйте! В вашем XML-файле УПД отсутствует обязательный реквизит ИГК. Добавьте тег <СвГосКонтр ИдентГосКонтр='...'/> в документ.",
+                },
+                # L3 - Разработчики и инфраструктура
+                {
+                    "line": "L3",
+                    "operator": operators_by_line.get("L3"),
+                    "status": TicketStatus.IN_PROGRESS.value,
+                    "priority": TicketPriority.P0.value,
+                    "query": "Критическая авария: отказ интеграционного шлюза ЕАИСТ / ЭДО Диадок, зависли 45 пакетов УПД.",
+                    "bot_reply": "Служба мониторинга зафиксировала сетевой таймаут интеграционного шлюза.",
+                    "summary": "Сбой интеграционного шлюза ЕАИСТ / ЭДО Диадок: задержка отправки пакетов УПД, таймауты SOAP-запросов.",
+                    "suggested_response": "Здравствуйте! Инцидент передан дежурному инженеру DevOps. Ведется перезапуск интеграционного шлюза и дренаж очереди пакетов.",
+                },
+                {
+                    "line": "L3",
+                    "operator": operators_by_line.get("L3"),
+                    "status": TicketStatus.ASSIGNED.value,
+                    "priority": TicketPriority.P1.value,
+                    "query": "Очередь асинхронного парсера YML-каталога зависла на 0% в Redis, таймаут воркеров.",
+                    "bot_reply": "Запрос передан инженерам третьей линии для анализа логов очередей Celery/Redis.",
+                    "summary": "Зависание очереди асинхронного парсера YML-каталога в Redis: превышение лимита памяти воркеров Celery.",
+                    "suggested_response": "Здравствуйте! Добавили дополнительные поды-обработчики очереди парсинга, очередь начала рассасываться.",
+                },
+            ]
+
+            for act in active_scenarios:
+                t_act = TicketModel(
+                    id=uuid6.uuid7(),
+                    chat_id=chat.id,
+                    line_id=lines[act["line"]].id,
+                    assigned_operator_id=act["operator"].id
+                    if act["operator"]
+                    else None,
+                    priority=act["priority"],
+                    status=act["status"],
+                    created_at=now_dt - timedelta(minutes=15),
+                    assigned_at=now_dt - timedelta(minutes=10)
+                    if act["operator"]
+                    else None,
+                    opened_at=now_dt - timedelta(minutes=8)
+                    if act["status"] == TicketStatus.IN_PROGRESS.value
+                    else None,
+                )
+                session.add(t_act)
+                await session.flush()
+
+                m_cl = MessageModel(
+                    id=uuid6.uuid7(),
+                    ticket_id=t_act.id,
+                    sender_type=MessageSenderType.CLIENT.value,
+                    sender_id=supplier.id,
+                    text=act["query"],
+                    moderation_status=MessageModerationStatus.PASSED.value,
+                    created_at=now_dt - timedelta(minutes=14),
+                )
+                session.add(m_cl)
+
+                if act.get("bot_reply"):
+                    m_bt = MessageModel(
+                        id=uuid6.uuid7(),
+                        ticket_id=t_act.id,
+                        sender_type=MessageSenderType.BOT.value,
+                        sender_id=None,
+                        text=act["bot_reply"],
+                        moderation_status=MessageModerationStatus.PASSED.value,
+                        created_at=now_dt - timedelta(minutes=13),
+                    )
+                    session.add(m_bt)
+
+                # Добавление Copilot подсказки для оператора
+                if act.get("summary"):
+                    copilot_s = TicketCopilotSummaryModel(
+                        id=uuid6.uuid7(),
+                        ticket_id=t_act.id,
+                        summary=act["summary"],
+                        suggested_line_code=act["line"],
+                        suggested_response=act.get("suggested_response"),
+                        recommended_chunk_ids=[],
+                        similar_resolved_tickets=[],
+                        created_at=now_dt - timedelta(minutes=12),
+                    )
+                    session.add(copilot_s)
+
+            await session.flush()
+            logger.info("Активные обращения для операторов L1, L2, L3 успешно созданы.")
 
         # Авто-сидирование базы знаний (kb_documents, kb_nodes)
         stmt_kb = select(func.count()).select_from(KbDocumentModel)

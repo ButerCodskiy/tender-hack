@@ -521,6 +521,27 @@ class RedisTicketEvents:
         )
         return await self.redis.publish(f"channel:ticket:{ticket_id}", message)
 
+    async def publish_session_terminated(
+        self,
+        ticket_id: UUID | str,
+        reason: str = "profanity",
+        message: str = "",
+    ) -> int:
+        """Публикует событие принудительного завершения диалога модерацией."""
+        payload = json.dumps(
+            {
+                "event": "session_terminated",
+                "data": {
+                    "ticket_id": str(ticket_id),
+                    "reason": reason,
+                    "message": message,
+                },
+            },
+            ensure_ascii=False,
+            default=str,
+        )
+        return await self.redis.publish(f"channel:ticket:{ticket_id}", payload)
+
     async def subscribe_ticket_events(
         self,
         ticket_id: UUID | str,

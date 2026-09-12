@@ -324,6 +324,14 @@ class MessageModel(Base):
                 return user_role.code
         return self.sender_type
 
+    @property
+    def ticket_status(self) -> str | None:
+        """Статус обращения, к которому относится реплика."""
+        ticket_obj = self.__dict__.get("ticket")
+        if ticket_obj is not None:
+            return ticket_obj.status
+        return None
+
     def __repr__(self) -> str:
         return (
             f"<MessageModel id={self.id} ticket_id={self.ticket_id} "

@@ -5,49 +5,84 @@ import {
   ShiftStatus,
 } from '../types/operator';
 import { Message } from '../types/chat';
-import { getStoredTokens } from './auth';
+import { getStoredTokens, getStoredUser } from './auth';
 import { isStandaloneMode } from '../config/mode';
 
 const STORAGE_SHIFT_KEY = 'portal_operator_shift';
 const STORAGE_TICKETS_KEY = 'portal_operator_tickets';
 const STORAGE_WORKSPACES_KEY = 'portal_operator_workspaces';
 
-const DEFAULT_PROFILE: OperatorProfile = {
-  user_id: 'op-001',
-  full_name: 'Смирнова Анна Сергеевна',
-  line_id: 1,
-  line_code: 'L1',
-  shift_status: 'active',
-  max_slots: 5,
-  active_slots_count: 3,
-};
+export function getOperatorLineCode(): 'L1' | 'L2' | 'L3' {
+  const user = getStoredUser();
+  if (user?.email === 'operator2@example.com' || user?.line_code === 'L2') return 'L2';
+  if (user?.email === 'operator3@example.com' || user?.line_code === 'L3') return 'L3';
+  return 'L1';
+}
 
-const DEFAULT_TICKETS: OperatorSidebarTicket[] = [
+export function getOperatorProfileForUser(): OperatorProfile {
+  const user = getStoredUser();
+  const line = getOperatorLineCode();
+  const rawShift = localStorage.getItem(`${STORAGE_SHIFT_KEY}_${line}`) as ShiftStatus | null;
+
+  if (line === 'L2') {
+    return {
+      user_id: user?.id || 'op-002',
+      full_name: user?.full_name || 'Кузнецов Петр Васильевич',
+      line_id: 2,
+      line_code: 'L2',
+      shift_status: rawShift || 'active',
+      max_slots: 5,
+      active_slots_count: 3,
+    };
+  }
+  if (line === 'L3') {
+    return {
+      user_id: user?.id || 'op-003',
+      full_name: user?.full_name || 'Соколова Елена Дмитриевна',
+      line_id: 3,
+      line_code: 'L3',
+      shift_status: rawShift || 'active',
+      max_slots: 5,
+      active_slots_count: 3,
+    };
+  }
+  return {
+    user_id: user?.id || 'op-001',
+    full_name: user?.full_name || 'Смирнова Анна Сергеевна',
+    line_id: 1,
+    line_code: 'L1',
+    shift_status: rawShift || 'active',
+    max_slots: 5,
+    active_slots_count: 3,
+  };
+}
+
+const DEFAULT_TICKETS_L1: OperatorSidebarTicket[] = [
   {
     ticket_id: 't-101',
     chat_id: 'c-101',
-    priority: 'P0',
-    status: 'assigned',
-    line_code: 'L1',
-    client_name: 'Кузнецов В.А.',
-    company_name: 'ООО «ПромСервис Поставка»',
-    last_message_preview: 'Срочно! Истекает срок подписания контракта КС-9482, ошибка КриптоПро.',
-    unread_messages_count: 2,
-    created_at: '10 мин. назад',
-    assigned_at: 'Только что',
-  },
-  {
-    ticket_id: 't-102',
-    chat_id: 'c-102',
     priority: 'P1',
-    status: 'in_progress',
+    status: 'assigned',
     line_code: 'L1',
     client_name: 'Иванов И.И.',
     company_name: 'ООО «ТехноСнаб»',
     last_message_preview: 'Не подгружается машиночитаемая доверенность (МЧД) из реестра ФНС.',
     unread_messages_count: 1,
-    created_at: '25 мин. назад',
-    assigned_at: '15 мин. назад',
+    created_at: '15 мин. назад',
+    assigned_at: '5 мин. назад',
+  },
+  {
+    ticket_id: 't-102',
+    chat_id: 'c-102',
+    priority: 'P2',
+    status: 'in_progress',
+    line_code: 'L1',
+    client_name: 'Петров С.Н.',
+    company_name: 'ООО «КанцТорг»',
+    last_message_preview: 'Ошибка импорта YML: тег <param name="Цвет"> не проходит валидацию.',
+    unread_messages_count: 0,
+    created_at: '35 мин. назад',
+    assigned_at: '20 мин. назад',
   },
   {
     ticket_id: 't-103',
@@ -64,65 +99,96 @@ const DEFAULT_TICKETS: OperatorSidebarTicket[] = [
   },
 ];
 
-const DEFAULT_WORKSPACES: Record<string, OperatorTicketWorkspace> = {
+const DEFAULT_TICKETS_L2: OperatorSidebarTicket[] = [
+  {
+    ticket_id: 't-201',
+    chat_id: 'c-201',
+    priority: 'P0',
+    status: 'assigned',
+    line_code: 'L2',
+    client_name: 'Кузнецов В.А.',
+    company_name: 'ООО «ПромСервис Поставка»',
+    last_message_preview: 'Срочно! Котировочная сессия КС-9482, ошибка КриптоПро 0x80090016.',
+    unread_messages_count: 2,
+    created_at: '8 мин. назад',
+    assigned_at: 'Только что',
+  },
+  {
+    ticket_id: 't-202',
+    chat_id: 'c-202',
+    priority: 'P1',
+    status: 'in_progress',
+    line_code: 'L2',
+    client_name: 'Морозов Д.К.',
+    company_name: 'ООО «СтройКомплект»',
+    last_message_preview: 'Не могу прикрепить УПД к контракту №9923/26. Ошибка формата по приказу 820.',
+    unread_messages_count: 1,
+    created_at: '25 мин. назад',
+    assigned_at: '15 мин. назад',
+  },
+  {
+    ticket_id: 't-203',
+    chat_id: 'c-203',
+    priority: 'P1',
+    status: 'in_progress',
+    line_code: 'L2',
+    client_name: 'Васильева О.П.',
+    company_name: 'АО «МедСнабжение»',
+    last_message_preview: 'Окно плагина КриптоПро зависает на этапе вызова функции SignHash.',
+    unread_messages_count: 0,
+    created_at: '45 мин. назад',
+    assigned_at: '20 мин. назад',
+  },
+];
+
+const DEFAULT_TICKETS_L3: OperatorSidebarTicket[] = [
+  {
+    ticket_id: 't-301',
+    chat_id: 'c-301',
+    priority: 'P0',
+    status: 'assigned',
+    line_code: 'L3',
+    client_name: 'Зайцев Е.М.',
+    company_name: 'ООО «ИнфоТех»',
+    last_message_preview: 'Авария: отказ интеграционного шлюза ЕАИСТ / ЭДО Диадок, зависли пакеты УПД.',
+    unread_messages_count: 3,
+    created_at: '5 мин. назад',
+    assigned_at: 'Только что',
+  },
+  {
+    ticket_id: 't-302',
+    chat_id: 'c-302',
+    priority: 'P1',
+    status: 'in_progress',
+    line_code: 'L3',
+    client_name: 'Белов А.С.',
+    company_name: 'ООО «ДатаГрупп»',
+    last_message_preview: 'Зависание очереди асинхронного парсера YML-каталога в Redis.',
+    unread_messages_count: 1,
+    created_at: '30 мин. назад',
+    assigned_at: '10 мин. назад',
+  },
+  {
+    ticket_id: 't-303',
+    chat_id: 'c-303',
+    priority: 'P1',
+    status: 'in_progress',
+    line_code: 'L3',
+    client_name: 'Романова К.И.',
+    company_name: 'ООО «ИТ-Решения»',
+    last_message_preview: 'Ошибка 502 Bad Gateway при массовой выгрузке закрывающих протоколов.',
+    unread_messages_count: 0,
+    created_at: '55 мин. назад',
+    assigned_at: '25 мин. назад',
+  },
+];
+
+const DEFAULT_WORKSPACES_L1: Record<string, OperatorTicketWorkspace> = {
   't-101': {
     ticket_id: 't-101',
     chat_id: 'c-101',
-    priority: 'P0',
-    status: 'assigned',
-    line_code: 'L1',
-    client: {
-      company_name: 'ООО «ПромСервис Поставка»',
-      inn: '7701984512',
-      kpp: '770101001',
-      phone: '+7 (495) 780-12-34',
-      full_name: 'Кузнецов Валерий Алексеевич',
-      email: 'kuznetsov@promservice.ru',
-    },
-    copilot_summary: {
-      summary: 'Критический сбой при подписании оферты котировочной сессии КС-9482. Ошибка плагина КриптоПро 0x80090014.',
-      suggested_line_code: 'L2',
-      suggested_response: 'Уважаемый Валерий Алексеевич! Для устранения ошибки КриптоПро 0x80090014 выполните очистку SSL-кэша браузера и переустановите КриптоПро ЭЦП Browser Plug-in версии 2.0.15000. Если ошибка сохранится, я переведу вас на инженера 2-й линии технической поддержки.',
-      recommended_chunk_ids: ['chunk-crypto-p4', 'chunk-signing-reg-v3'],
-      similar_resolved_tickets: [
-        {
-          ticket_id: 't-084',
-          support_line: 'L2',
-          user_query: 'Ошибка валидации сертификата при подписании контракта',
-          solution_text: 'Выполнена переустановка корневых сертификатов Минцифры и очистка кэша КриптоПро.',
-          similarity_score: 0.94,
-        },
-      ],
-    },
-    messages: [
-      {
-        id: 'm-1',
-        content: 'Здравствуйте! Не могу подписать контракт по котировочной сессии КС-9482. До окончания регламентного срока осталось 40 минут! Выдает ошибку плагина.',
-        type: 'user',
-        timestamp: '15:10',
-        actions: [],
-      },
-      {
-        id: 'm-2',
-        content: 'Для подписания документов требуется квалифицированная электронная подпись (УКЭП) и настроенный КриптоПро ЭЦП Browser plug-in.',
-        type: 'assistant',
-        timestamp: '15:10',
-        actions: [],
-      },
-      {
-        id: 'm-3',
-        content: 'Бот не помог, соедините срочно с оператором!',
-        type: 'user',
-        timestamp: '15:12',
-        actions: [],
-      },
-    ],
-  },
-  't-102': {
-    ticket_id: 't-102',
-    chat_id: 'c-102',
     priority: 'P1',
-    status: 'in_progress',
+    status: 'assigned',
     line_code: 'L1',
     client: {
       company_name: 'ООО «ТехноСнаб»',
@@ -149,10 +215,39 @@ const DEFAULT_WORKSPACES: Record<string, OperatorTicketWorkspace> = {
     },
     messages: [
       {
-        id: 'm-10',
+        id: 'm-101-1',
         content: 'Добрый день. Пытаюсь загрузить МЧД из реестра ФНС, пишет «Доверенность не найдена или не активна». Но в ФНС статус «Зарегистрирована».',
         type: 'user',
         timestamp: '14:50',
+        actions: [],
+      },
+    ],
+  },
+  't-102': {
+    ticket_id: 't-102',
+    chat_id: 'c-102',
+    priority: 'P2',
+    status: 'in_progress',
+    line_code: 'L1',
+    client: {
+      company_name: 'ООО «КанцТорг»',
+      inn: '7702847510',
+      phone: '+7 (495) 912-34-56',
+      full_name: 'Петров Сергей Николаевич',
+      email: 'petrov@kanctorg.ru',
+    },
+    copilot_summary: {
+      summary: 'Ошибка импорта каталога YML: тег <param name="Цвет"> не проходит валидацию на строке 48.',
+      suggested_line_code: 'L1',
+      suggested_response: 'Здравствуйте, Сергей Николаевич! Проверил ваш файл: в категории "Канцтовары" параметр "Цвет" требует выбора предопределенного значения из классификатора Портала. Замените текстовое описание цвета на соответствующий ID.',
+      recommended_chunk_ids: ['chunk-yml-import-rules'],
+    },
+    messages: [
+      {
+        id: 'm-102-1',
+        content: 'Ошибка импорта YML: тег <param name="Цвет"> не проходит валидацию на строке 48. Как загрузить оферты в каталог?',
+        type: 'user',
+        timestamp: '14:30',
         actions: [],
       },
     ],
@@ -178,7 +273,7 @@ const DEFAULT_WORKSPACES: Record<string, OperatorTicketWorkspace> = {
     },
     messages: [
       {
-        id: 'm-20',
+        id: 'm-103-1',
         content: 'Здравствуйте, подскажите, в какой срок поставщик имеет право направить протокол разногласий?',
         type: 'user',
         timestamp: '14:15',
@@ -188,33 +283,238 @@ const DEFAULT_WORKSPACES: Record<string, OperatorTicketWorkspace> = {
   },
 };
 
+const DEFAULT_WORKSPACES_L2: Record<string, OperatorTicketWorkspace> = {
+  't-201': {
+    ticket_id: 't-201',
+    chat_id: 'c-201',
+    priority: 'P0',
+    status: 'assigned',
+    line_code: 'L2',
+    client: {
+      company_name: 'ООО «ПромСервис Поставка»',
+      inn: '7701984512',
+      kpp: '770101001',
+      phone: '+7 (495) 780-12-34',
+      full_name: 'Кузнецов Валерий Алексеевич',
+      email: 'kuznetsov@promservice.ru',
+    },
+    copilot_summary: {
+      summary: 'Критический сбой плагина КриптоПро 0x80090016 при подписании оферты котировочной сессии КС-9482.',
+      suggested_line_code: 'L2',
+      suggested_response: 'Здравствуйте, Валерий Алексеевич! Ошибка 0x80090016 указывает на невозможность считывания закрытого ключа. Переподключите USB-токен Рутокен, перезапустите службу "КриптоПро CSP" и убедитесь, что в хранилище установлены корневые сертификаты УЦ ФНС.',
+      recommended_chunk_ids: ['chunk-crypto-p1', 'chunk-crypto-p2'],
+      similar_resolved_tickets: [
+        {
+          ticket_id: 't-084',
+          support_line: 'L2',
+          user_query: 'Ошибка 0x80090016 КриптоПро при подписании',
+          solution_text: 'Переустановка корневых сертификатов Минцифры и очистка SSL-кэша браузера.',
+          similarity_score: 0.96,
+        },
+      ],
+    },
+    messages: [
+      {
+        id: 'm-201-1',
+        content: 'Срочно! Идет котировочная сессия КС-9482, не могу подписать оферту! Ошибка плагина: 0x80090016 Набор ключей не существует. Сессия закроется через 20 минут!',
+        type: 'user',
+        timestamp: '15:10',
+        actions: [],
+      },
+    ],
+  },
+  't-202': {
+    ticket_id: 't-202',
+    chat_id: 'c-202',
+    priority: 'P1',
+    status: 'in_progress',
+    line_code: 'L2',
+    client: {
+      company_name: 'ООО «СтройКомплект»',
+      inn: '7705412398',
+      phone: '+7 (495) 654-32-10',
+      full_name: 'Морозов Дмитрий Константинович',
+      email: 'morozov@stroykomplekt.ru',
+    },
+    copilot_summary: {
+      summary: 'Ошибка валидации схемы XML универсального передаточного документа (УПД) по приказу ФНС 820.',
+      suggested_line_code: 'L2',
+      suggested_response: 'Здравствуйте, Дмитрий Константинович! В вашем XML-файле УПД отсутствует обязательный реквизит ИГК (Идентификатор государственного контракта). Добавьте тег <СвГосКонтр ИдентГосКонтр="..."/> в структуру документа.',
+      recommended_chunk_ids: ['chunk-upd-order820-spec'],
+    },
+    messages: [
+      {
+        id: 'm-202-1',
+        content: 'Не могу прикрепить УПД к исполненному контракту №9923/26. Выдает "Ошибка формата XML файла УПД по приказу 820".',
+        type: 'user',
+        timestamp: '14:40',
+        actions: [],
+      },
+    ],
+  },
+  't-203': {
+    ticket_id: 't-203',
+    chat_id: 'c-203',
+    priority: 'P1',
+    status: 'in_progress',
+    line_code: 'L2',
+    client: {
+      company_name: 'АО «МедСнабжение»',
+      inn: '7708912345',
+      phone: '+7 (495) 234-56-78',
+      full_name: 'Васильева Ольга Павловна',
+      email: 'vasilyeva@medsnab.ru',
+    },
+    copilot_summary: {
+      summary: 'Зависание диалогового окна cadesplugin на шаге вызова функции SignHash в браузере Chromium.',
+      suggested_line_code: 'L2',
+      suggested_response: 'Здравствуйте, Ольга Павловна! Данный сбой вызван конфликтом версий расширения. Рекомендуем выполнить сброс кэша браузера и обновить CAdES Browser Plug-in до актуальной версии 2.0.15000.',
+      recommended_chunk_ids: ['chunk-cadesplugin-hang'],
+    },
+    messages: [
+      {
+        id: 'm-203-1',
+        content: 'При нажатии "Подписать протокол" окно плагина ЭЦП зависает на этапе "Инициализация криптопровайдера...". Как решить?',
+        type: 'user',
+        timestamp: '14:20',
+        actions: [],
+      },
+    ],
+  },
+};
+
+const DEFAULT_WORKSPACES_L3: Record<string, OperatorTicketWorkspace> = {
+  't-301': {
+    ticket_id: 't-301',
+    chat_id: 'c-301',
+    priority: 'P0',
+    status: 'assigned',
+    line_code: 'L3',
+    client: {
+      company_name: 'ООО «ИнфоТех»',
+      inn: '7709841235',
+      phone: '+7 (495) 789-01-23',
+      full_name: 'Зайцев Евгений Михайлович',
+      email: 'zaytsev@infotech.ru',
+    },
+    copilot_summary: {
+      summary: 'Сбой интеграционного шлюза ЕАИСТ / ЭДО Диадок: задержка отправки пакетов УПД, таймауты SOAP-запросов.',
+      suggested_line_code: 'L3',
+      suggested_response: 'Здравствуйте, Евгений Михайлович! Инцидент INC-8401 передан дежурному инженеру DevOps. Ведется перезапуск интеграционного шлюза и дренаж очереди пакетов. Восстановление ожидается в течение 20 минут.',
+      recommended_chunk_ids: ['chunk-infra-gateway-diadoc'],
+      similar_resolved_tickets: [
+        {
+          ticket_id: 't-012',
+          support_line: 'L3',
+          user_query: 'Сбой шлюза ЭДО Диадок',
+          solution_text: 'Перезапуск подов шлюза и повторный запуск консюмеров RabbitMQ.',
+          similarity_score: 0.98,
+        },
+      ],
+    },
+    messages: [
+      {
+        id: 'm-301-1',
+        content: 'Критическая авария: отказ интеграционного шлюза ЕАИСТ / ЭДО Диадок, зависли 45 пакетов УПД! Просьба срочно эскалировать администраторам.',
+        type: 'user',
+        timestamp: '15:25',
+        actions: [],
+      },
+    ],
+  },
+  't-302': {
+    ticket_id: 't-302',
+    chat_id: 'c-302',
+    priority: 'P1',
+    status: 'in_progress',
+    line_code: 'L3',
+    client: {
+      company_name: 'ООО «ДатаГрупп»',
+      inn: '7707654321',
+      phone: '+7 (495) 456-78-90',
+      full_name: 'Белов Андрей Сергеевич',
+      email: 'belov@datagroup.ru',
+    },
+    copilot_summary: {
+      summary: 'Зависание очереди асинхронного парсера YML-каталога в Redis: превышение лимита памяти воркеров Celery.',
+      suggested_line_code: 'L3',
+      suggested_response: 'Здравствуйте, Андрей Сергеевич! Диагностировали переполнение очереди воркеров парсинга. Добавили 4 дополнительных пода-обработчика, очередь начала рассасываться.',
+      recommended_chunk_ids: ['chunk-infra-redis-parser'],
+    },
+    messages: [
+      {
+        id: 'm-302-1',
+        content: 'Очередь асинхронного парсера YML зависла на 0% в Redis, таймаут фоновых воркеров при обработке прайса на 15 000 позиций.',
+        type: 'user',
+        timestamp: '15:00',
+        actions: [],
+      },
+    ],
+  },
+  't-303': {
+    ticket_id: 't-303',
+    chat_id: 'c-303',
+    priority: 'P1',
+    status: 'in_progress',
+    line_code: 'L3',
+    client: {
+      company_name: 'ООО «ИТ-Решения»',
+      inn: '7703344556',
+      phone: '+7 (495) 321-65-49',
+      full_name: 'Романова Ксения Игоревна',
+      email: 'romanova@it-solutions.ru',
+    },
+    copilot_summary: {
+      summary: 'HTTP 502 Bad Gateway при массовой генерации PDF протоколов котировочных сессий в часы пиковой нагрузки.',
+      suggested_line_code: 'L3',
+      suggested_response: 'Здравствуйте, Ксения Игоревна! Увеличен пул коннектов PostgreSQL и скорректирован таймаут nginx upstream для генератора PDF. Ошибка 502 устранена.',
+      recommended_chunk_ids: ['chunk-infra-pg-pool'],
+    },
+    messages: [
+      {
+        id: 'm-303-1',
+        content: 'Ошибка 502 Bad Gateway при массовой выгрузке закрывающих протоколов котировочных сессий. База не отвечает.',
+        type: 'user',
+        timestamp: '14:35',
+        actions: [],
+      },
+    ],
+  },
+};
+
 function getLocalStoredTickets(): OperatorSidebarTicket[] {
+  const line = getOperatorLineCode();
   try {
-    const raw = localStorage.getItem(STORAGE_TICKETS_KEY);
-    return raw ? JSON.parse(raw) : DEFAULT_TICKETS;
-  } catch {
-    return DEFAULT_TICKETS;
-  }
+    const raw = localStorage.getItem(`${STORAGE_TICKETS_KEY}_${line}`);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  if (line === 'L2') return DEFAULT_TICKETS_L2;
+  if (line === 'L3') return DEFAULT_TICKETS_L3;
+  return DEFAULT_TICKETS_L1;
 }
 
 function saveLocalStoredTickets(tickets: OperatorSidebarTicket[]) {
+  const line = getOperatorLineCode();
   try {
-    localStorage.setItem(STORAGE_TICKETS_KEY, JSON.stringify(tickets));
+    localStorage.setItem(`${STORAGE_TICKETS_KEY}_${line}`, JSON.stringify(tickets));
   } catch {}
 }
 
 function getLocalWorkspaces(): Record<string, OperatorTicketWorkspace> {
+  const line = getOperatorLineCode();
   try {
-    const raw = localStorage.getItem(STORAGE_WORKSPACES_KEY);
-    return raw ? JSON.parse(raw) : DEFAULT_WORKSPACES;
-  } catch {
-    return DEFAULT_WORKSPACES;
-  }
+    const raw = localStorage.getItem(`${STORAGE_WORKSPACES_KEY}_${line}`);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  if (line === 'L2') return DEFAULT_WORKSPACES_L2;
+  if (line === 'L3') return DEFAULT_WORKSPACES_L3;
+  return DEFAULT_WORKSPACES_L1;
 }
 
 function saveLocalWorkspaces(workspaces: Record<string, OperatorTicketWorkspace>) {
+  const line = getOperatorLineCode();
   try {
-    localStorage.setItem(STORAGE_WORKSPACES_KEY, JSON.stringify(workspaces));
+    localStorage.setItem(`${STORAGE_WORKSPACES_KEY}_${line}`, JSON.stringify(workspaces));
   } catch {}
 }
 
@@ -233,11 +533,7 @@ export async function getOperatorShift(): Promise<OperatorProfile> {
     } catch {}
   }
 
-  const rawShift = localStorage.getItem(STORAGE_SHIFT_KEY) as ShiftStatus | null;
-  return {
-    ...DEFAULT_PROFILE,
-    shift_status: rawShift || 'active',
-  };
+  return getOperatorProfileForUser();
 }
 
 export async function updateOperatorShift(shift_status: ShiftStatus): Promise<OperatorProfile> {
@@ -258,9 +554,11 @@ export async function updateOperatorShift(shift_status: ShiftStatus): Promise<Op
     } catch {}
   }
 
-  localStorage.setItem(STORAGE_SHIFT_KEY, shift_status);
+  const line = getOperatorLineCode();
+  localStorage.setItem(`${STORAGE_SHIFT_KEY}_${line}`, shift_status);
+  const baseProfile = getOperatorProfileForUser();
   return {
-    ...DEFAULT_PROFILE,
+    ...baseProfile,
     shift_status,
   };
 }
@@ -383,7 +681,7 @@ export async function sendOperatorMessage(ticketId: string, text: string): Promi
       content: text,
       type: 'assistant' as const,
       sender_type: 'operator' as const,
-      sender_name: 'Смирнова Анна Сергеевна',
+      sender_name: getOperatorProfileForUser().full_name,
       sender_role: 'operator',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       actions: ['copy' as const],

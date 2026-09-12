@@ -24,6 +24,12 @@ export interface SystemIncident {
   status: IncidentStatus | string;
   created_at: string;
   resolved_at?: string | null;
+  error_code?: string;
+  llm_verdict?: string;
+  raw_score?: number;
+  adjusted_score?: number;
+  dialog_excerpt?: string;
+  operator_name?: string;
 }
 
 export interface OperatorDailyMetric {
@@ -38,3 +44,32 @@ export interface OperatorDailyMetric {
   avg_adjusted_csat?: number | null;
   avg_ai_quality_score?: number | null;
 }
+
+export interface DeflectionTrendPoint {
+  dayLabel: string;
+  rate: number;
+  botCount: number;
+  totalCount: number;
+}
+
+export interface CategoryBreakdown {
+  label: string;
+  count: number;
+  share: number;
+  color: string;
+}
+
+export interface SlaTimelinePoint {
+  timeLabel: string;
+  frtSec: number;
+  slaTargetSec: number;
+  ahtSec: number;
+}
+
+export interface CsatDistributionPoint {
+  stars: number;
+  rawCount: number;
+  adjustedCount: number;
+  excludedCount: number;
+}
+
