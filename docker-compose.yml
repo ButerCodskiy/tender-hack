@@ -1,9 +1,6 @@
 name: rag
 
 x-backend-base: &backend-base
-  build:
-    context: ./backend
-    dockerfile: Dockerfile
   image: rag-backend:latest
   restart: unless-stopped
   env_file:
@@ -90,6 +87,9 @@ services:
 
   api:
     <<: *backend-base
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: rag_api
     ports:
       - "8000:8000"
