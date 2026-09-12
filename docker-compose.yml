@@ -9,6 +9,7 @@ x-backend-base: &backend-base
     DB_HOST: postgres
     REDIS_HOST: redis
     QDRANT_HOST: qdrant
+    OLLAMA_BASE_URL: http://ollama:11434
     KB_STORAGE_DIR: /data/kb_documents
   volumes:
     - ./backend/src:/app/src
@@ -85,6 +86,17 @@ services:
     networks:
       - rag_network
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: rag_ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - rag_network
+
   api:
     <<: *backend-base
     build:
@@ -133,6 +145,7 @@ volumes:
   redis_data:
   qdrant_data:
   kb_documents_data:
+  ollama_data:
 
 networks:
   rag_network:

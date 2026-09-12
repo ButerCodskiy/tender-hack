@@ -70,6 +70,16 @@ class Settings(BaseSettings):
     # Хранилище документов базы знаний
     KB_STORAGE_DIR: Path = BASE_DIR / "storage" / "kb_documents"
 
+    # Ollama и генеративный контур (RTX 4060 Host)
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_MODEL: str = "qwen2.5:3b"
+    OLLAMA_TIMEOUT_SECONDS: float = 30.0
+
+    # Эмбеддинги (bge-m3 1024D)
+    EMBEDDING_MODEL_NAME: str = "BAAI/bge-m3"
+    EMBEDDING_DEVICE: str = "cpu"
+    ENABLE_LOCAL_NEURAL_EMBEDDINGS: bool = False
+
     @property
     def DATABASE_URL(self) -> str:
         """Строка подключения к PostgreSQL для асинхронного драйвера asyncpg."""

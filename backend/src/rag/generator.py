@@ -9,6 +9,7 @@ from uuid import UUID
 
 import razdel
 
+from src.core.llm_client import get_llm_stream_client
 from src.rag.prompts import format_rag_prompt
 from src.rag.schemas import (
     ContextChunk,
@@ -209,7 +210,7 @@ class RagStreamGenerator:
         timeout: float = 30.0,
     ) -> None:
         """Инициализирует генератор потока с заданным клиентом LLM."""
-        self.llm_client = llm_client or MockLlmStreamClient()
+        self.llm_client = llm_client or get_llm_stream_client()
         self.timeout = timeout
         self.guard = FactCheckingGuard()
 
