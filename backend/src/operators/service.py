@@ -413,6 +413,53 @@ class OperatorService:
             else None
         )
 
+        if copilot_dto is None and messages_dto:
+            try:
+                import uuid6
+
+                from src.core.qdrant_client import get_qdrant_client
+                from src.operators.models import TicketCopilotSummaryModel
+                from src.rag.copilot import CopilotService
+
+                copilot_service = CopilotService(
+                    qdrant_client=get_qdrant_client()
+                )
+                messages_dicts = [
+                    {
+                        "sender_type": str(
+                            getattr(m.sender_type, "value", m.sender_type)
+                        ),
+                        "text": m.text,
+                    }
+                    for m in ticket.messages
+                ]
+                copilot_dto = await copilot_service.build_copilot_summary(
+                    ticket_id=ticket.id,
+                    messages=messages_dicts,
+                )
+                new_summary = TicketCopilotSummaryModel(
+                    id=uuid6.uuid7(),
+                    ticket_id=ticket.id,
+                    summary=copilot_dto.summary,
+                    suggested_line_code=copilot_dto.suggested_line_code,
+                    suggested_response=copilot_dto.suggested_response,
+                    recommended_chunk_ids=copilot_dto.recommended_chunk_ids,
+                    similar_resolved_tickets=[
+                        item.model_dump()
+                        for item in (
+                            copilot_dto.similar_resolved_tickets or []
+                        )
+                    ],
+                )
+                self.session.add(new_summary)
+                await self.session.commit()
+            except Exception as exc:
+                logger.warning(
+                    "Не удалось подготовить Copilot summary на лету для тикета %s: %s",
+                    ticket.id,
+                    exc,
+                )
+
         return OperatorTicketWorkspaceSchema(
             ticket_id=ticket.id,
             chat_id=ticket.chat_id,
