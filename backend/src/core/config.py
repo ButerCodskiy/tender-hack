@@ -71,9 +71,9 @@ class Settings(BaseSettings):
     KB_STORAGE_DIR: Path = BASE_DIR / "storage" / "kb_documents"
 
     # Ollama и генеративный контур (RTX 4060 Host)
-    OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_MODEL: str = "qwen2.5:3b"
-    OLLAMA_TIMEOUT_SECONDS: float = 30.0
+    OLLAMA_BASE_URL: str = "http://100.65.4.110:9117"
+    OLLAMA_MODEL: str = "qwen3.5:2b-instruct"
+    OLLAMA_TIMEOUT_SECONDS: float = 45.0
 
     # Эмбеддинги (bge-m3 1024D)
     EMBEDDING_MODEL_NAME: str = "BAAI/bge-m3"

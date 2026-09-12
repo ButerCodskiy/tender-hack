@@ -16,11 +16,11 @@ logger = logging.getLogger(__name__)
 class Retriever:
     def __init__(
         self,
-        embedding_model: EmbeddingStub,
+        embedding_model: EmbeddingStub | None = None,
         top_k: int = 10,
         qdrant_client: AsyncQdrantClient | None = None,
     ):
-        self.embedding_model = embedding_model
+        self.embedding_model = embedding_model or EmbeddingStub(dim=1024)
         self.top_k = top_k
         self.qdrant_client = qdrant_client or get_qdrant_client()
 
@@ -46,15 +46,17 @@ class Retriever:
                 with_payload=True,
             )
         except Exception as e:
-            logger.error(f"При пооиске Qdrant произошла ошибка: {e}")
+            logger.error(f"При поиске Qdrant произошла ошибка: {e}")
             return []
 
         return [
             RagSourceChunkSchema(
                 chunk_id=str(point.payload.get("chunk_id", point.id)),
                 doc_id=point.payload.get("doc_id", ""),
-                title=point.payload.get("title"),
+                title=point.payload.get("title") or point.payload.get("section_path") or "Нормативный регламент",
                 quote_text=point.payload.get("text"),
+                section_path=point.payload.get("section_path"),
+                source_url=point.payload.get("source_url"),
                 relevance_score=point.score,
             )
             for point in response.points

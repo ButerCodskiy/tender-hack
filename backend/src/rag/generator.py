@@ -207,11 +207,13 @@ class RagStreamGenerator:
     def __init__(
         self,
         llm_client: LlmStreamClientProtocol | None = None,
-        timeout: float = 30.0,
+        timeout: float | None = None,
     ) -> None:
         """Инициализирует генератор потока с заданным клиентом LLM."""
+        from src.core.config import settings
+
         self.llm_client = llm_client or get_llm_stream_client()
-        self.timeout = timeout
+        self.timeout = timeout or settings.OLLAMA_TIMEOUT_SECONDS
         self.guard = FactCheckingGuard()
 
     async def generate_response_stream(
