@@ -1,12 +1,15 @@
 """Генерация сводки диалога и подсказок оператору (Copilot)."""
 
 import asyncio
+import json
 import logging
 from typing import Any, ClassVar, Protocol, runtime_checkable
 from uuid import UUID
 
+import httpx
 from qdrant_client import AsyncQdrantClient
 
+from src.core.config import settings
 from src.core.qdrant_client import get_qdrant_client
 from src.operators.schemas import (
     CopilotSummaryResponseSchema,
@@ -155,16 +158,104 @@ class MockCopilotLlmClient:
         )
 
 
+class OllamaCopilotLlmClient:
+    """Клиент вызова локального инференса Ollama (/v1/chat/completions) с таймаутом и фолбэком."""
+
+    DEFAULT_TIMEOUT: float = 4.0
+
+    def __init__(
+        self,
+        base_url: str | None = None,
+        model: str | None = None,
+        timeout: float = 4.0,
+    ) -> None:
+        """Инициализирует подключение к локальному сервису Ollama."""
+        self.base_url = (base_url or settings.OLLAMA_BASE_URL).rstrip("/")
+        self.model = model or settings.OLLAMA_MODEL
+        self.timeout = timeout
+        self.fallback_client = MockCopilotLlmClient()
+
+    async def generate_copilot_summary(
+        self,
+        prompt: str,
+        system_prompt: str,
+        timeout: float | None = None,
+    ) -> CopilotLlmOutputSchema:
+        """Запрашивает подсказку у Ollama с ограничением времени до 4.0с и бесшовным откатом."""
+        effective_timeout = timeout if timeout is not None else self.timeout
+        endpoint = f"{self.base_url}/v1/chat/completions"
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0.2,
+            "response_format": {"type": "json_object"},
+        }
+
+        timeout_config = httpx.Timeout(
+            effective_timeout, connect=min(1.5, effective_timeout)
+        )
+
+        try:
+            async with httpx.AsyncClient(timeout=timeout_config) as client:
+                response = await client.post(endpoint, json=payload)
+                if response.status_code == 200:
+                    data = response.json()
+                    content = (
+                        data.get("choices", [{}])[0]
+                        .get("message", {})
+                        .get("content", "")
+                    )
+                    cleaned_content = content.strip()
+                    cleaned_content = cleaned_content.removeprefix("```json")
+                    cleaned_content = cleaned_content.removeprefix("```")
+                    cleaned_content = cleaned_content.removesuffix("```")
+                    cleaned_content = cleaned_content.strip()
+
+                    parsed = json.loads(cleaned_content)
+                    return CopilotLlmOutputSchema.model_validate(parsed)
+
+                logger.warning(
+                    "Ollama API returned status %s. Triggering fallback.",
+                    response.status_code,
+                )
+        except (httpx.TimeoutException, TimeoutError) as exc:
+            logger.warning(
+                "Ollama copilot timeout (%.1fs): %s. Seamless fallback to template.",
+                effective_timeout,
+                exc,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Ollama copilot inference error: %s. Seamless fallback to template.",
+                exc,
+            )
+
+        # Бесшовный откат на быстрый эвристический ответ без падения интерфейса
+        return await self.fallback_client.generate_copilot_summary(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            timeout=effective_timeout,
+        )
+
+
 class CopilotService:
     """Сервис формирования аналитической подсказки оператора и подбора прецедентов."""
+
+    DEFAULT_TIMEOUT: float = 4.0
 
     def __init__(
         self,
         llm_client: CopilotLlmClientProtocol | None = None,
         qdrant_client: AsyncQdrantClient | None = None,
+        timeout: float = 4.0,
     ) -> None:
         """Инициализирует сервис клиентом LLM и клиентом Qdrant."""
-        self.llm_client = llm_client or MockCopilotLlmClient()
+        self.timeout = timeout
+        self.fallback_client = MockCopilotLlmClient()
+        self.llm_client = llm_client or OllamaCopilotLlmClient(timeout=timeout)
         self.qdrant_client = qdrant_client
 
     def _format_conversation(self, messages: list[dict[str, Any]]) -> str:
@@ -219,17 +310,32 @@ class CopilotService:
                 limit=3,
             )
 
-        # 2. Генерация аналитической выжимки через LLM
+        # 2. Генерация аналитической выжимки через LLM с таймаутом до 4.0с
         prompt = (
             f"ИСТОРИЯ ОБРАЩЕНИЯ (ТИКЕТ {ticket_id}):\n"
             f"{conversation_context}\n\n"
             "Сформируй краткую суть, выбери линию поддержки и составь черновик ответа."
         )
 
-        llm_output = await self.llm_client.generate_copilot_summary(
-            prompt=prompt,
-            system_prompt=COPILOT_SYSTEM_PROMPT,
-        )
+        try:
+            llm_output = await asyncio.wait_for(
+                self.llm_client.generate_copilot_summary(
+                    prompt=prompt,
+                    system_prompt=COPILOT_SYSTEM_PROMPT,
+                    timeout=self.timeout,
+                ),
+                timeout=self.timeout,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Copilot LLM execution error/timeout: %s. Using heuristic fallback.",
+                exc,
+            )
+            llm_output = await self.fallback_client.generate_copilot_summary(
+                prompt=prompt,
+                system_prompt=COPILOT_SYSTEM_PROMPT,
+                timeout=self.timeout,
+            )
 
         # 3. Агрегация в публичную контрактную схему
         return CopilotSummaryResponseSchema(
