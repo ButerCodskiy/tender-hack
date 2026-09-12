@@ -1,13 +1,19 @@
 """Тесты сервисной заглушки поискового ядра RagService и контрактов потоковых событий."""
 
+from unittest.mock import AsyncMock
+
 import uuid6
 from pydantic import TypeAdapter
 
+from src.rag.generator import MockLlmStreamClient, RagStreamGenerator
+from src.rag.retriever import Retriever
 from src.rag.schemas import (
+    RagDegradedModeEventSchema,
     RagDoneEventSchema,
     RagQueryRequestSchema,
     RagResponseSchema,
     RagSentenceEventSchema,
+    RagSourceChunkSchema,
     RagSourcesEventSchema,
     RagStatusEventSchema,
     RagStreamEvent,
@@ -15,9 +21,35 @@ from src.rag.schemas import (
 from src.rag.service import RagService
 
 
+def _get_mock_service(
+    chunks: list[RagSourceChunkSchema] | None = None,
+) -> RagService:
+    """Создает изолированный RagService с мок-генератором и мок-ретривером."""
+    if chunks is None:
+        chunks = [
+            RagSourceChunkSchema(
+                chunk_id="chunk_portal_zakupki_reglament_sec4_p1",
+                doc_id="DOC_PORTAL_REGULATION_V6",
+                title="Регламент ведения котировочных сессий. Раздел 4. Подписание протоколов",
+                quote_text=(
+                    "Участник закупки вправе сформировать и подписать протокол разногласий "
+                    "в личном кабинете поставщика в течение 3 рабочих дней с момента "
+                    "публикации проекта контракта заказчиком."
+                ),
+                section_path="Раздел 4. Подписание протоколов",
+                source_url="https://zakupki.mos.ru/regulations/p4",
+                relevance_score=0.96,
+            )
+        ]
+    mock_retriever = AsyncMock(spec=Retriever)
+    mock_retriever.retrieve.return_value = chunks
+    mock_generator = RagStreamGenerator(llm_client=MockLlmStreamClient())
+    return RagService(generator=mock_generator, retriever=mock_retriever)
+
+
 async def test_generate_answer_stream_flow() -> None:
     """Проверяет корректность потока событий SSE: порядок, структуру и типы."""
-    service = RagService()
+    service = _get_mock_service()
     message_id = uuid6.uuid7()
     payload = RagQueryRequestSchema(
         query="Как подписать протокол разногласий?",
@@ -76,9 +108,26 @@ async def test_generate_answer_stream_flow() -> None:
     assert events[5].text in events[6].text
 
 
+async def test_generate_answer_degraded_mode_when_no_chunks() -> None:
+    """Проверяет переход в режим деградации без вызова LLM при отсутствии найденных чанков (ADR 0005)."""
+    service = _get_mock_service(chunks=[])
+    payload = RagQueryRequestSchema(query="Какой рецепт борща?")
+
+    events: list[RagStreamEvent] = []
+    async for event in service.generate_answer(payload):
+        events.append(event)
+
+    # 3 status + 1 degraded_mode (без обращения к генератору)
+    assert len(events) == 4
+    degraded_event = events[-1]
+    assert isinstance(degraded_event, RagDegradedModeEventSchema)
+    assert degraded_event.event == "degraded_mode"
+    assert "не найдена" in degraded_event.message
+
+
 async def test_generate_answer_without_message_id() -> None:
     """Проверяет генерацию ответа без предварительно заданного message_id."""
-    service = RagService()
+    service = _get_mock_service()
     payload = RagQueryRequestSchema(query="Как пройти регистрацию?")
 
     events: list[RagStreamEvent] = []
