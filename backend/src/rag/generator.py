@@ -1,6 +1,7 @@
 """Конвейер потоковой генерации ответа со сносками и верификацией фактов."""
 
 import asyncio
+import json
 import logging
 import re
 from collections.abc import AsyncIterator
@@ -153,29 +154,33 @@ class FactCheckingGuard:
         """Извлекает нормализованные числовые значения, проценты, суммы и даты.
 
         Предварительно вырезает маркеры сносок, нумерованные списки, а также
-        структурные обозначения (Способ 1, Шаг 2, Вариант 3), исключая ложные
-        срабатывания на нумерацию шагов.
+        структурные обозначения (Способ 1, Шаг 2, Вариант 3, Блок 4), исключая
+        ложные срабатывания на нумерацию шагов и списков.
         """
         # 1. Исключаем сноски
         cleaned = self.FOOTNOTE_REGEX.sub("", text)
         # 2. Исключаем упоминания источников вида "(источники 6 и 7)", "источник 1"
         cleaned = re.sub(r"(?i)\(источник[и]?\s*[\d\s,и]+\)", " ", cleaned)
         cleaned = re.sub(r"(?i)\bисточник[и]?\s+\d+\b", " ", cleaned)
-        # 3. Исключаем структурную нумерацию (Способ 1, Шаг 2, Вариант 3, Раздел 4, Пункт 5)
+        # 3. Исключаем структурную нумерацию (Способ 1, Шаг 2, Вариант 3, Раздел 4, Пункт 5, Блок 6, Рисунок 7)
         cleaned = re.sub(
-            r"(?i)\b(?:способ|шаг|этап|вариант|пункт|раздел|глава|часть)\s+\d+\b",
+            r"(?i)\b(?:способ|шаг|этап|вариант|пункт|раздел|глава|часть|блок|рисунок|статья)\s*№?\s*\d+\b",
             " ",
             cleaned,
         )
-        # 4. Исключаем маркеры нумерованных списков и подзаголовков (1., 2., ### 1., 1) )
+        # 4. Исключаем порядковые числительные (1-й, 2-го, 3-м)
+        cleaned = re.sub(r"\b\d+-(?:й|го|му|м|я|е|го|х)\b", " ", cleaned)
+        # 5. Исключаем маркеры нумерованных списков и подзаголовков (1., 2., ### 1., 1) , **1.**, "1.)
         cleaned = re.sub(
-            r"(?:^|(?<=\n))\s*(?:#{1,6}\s*)?\d+[\.)]\s*", " ", cleaned
+            r"(?:^|[\n\r]|\\n|[.\?!;]\s*|[\"'\(\[\{]\s*)\s*(?:#{1,6}\s*)?(?:\*{1,2})?\d+[\.)](?:\*{1,2})?\s*",
+            " ",
+            cleaned,
         )
-        # 5. Склеиваем пробелы между цифрами (например, "500 000" -> "500000")
+        # 6. Склеиваем пробелы между цифрами (например, "500 000" -> "500000")
         normalized = re.sub(r"(?<=\d)\s+(?=\d)", "", cleaned)
-        # 6. Нормализуем слеши в датах (например, "15/10/2024" -> "15.10.2024")
+        # 7. Нормализуем слеши в датах (например, "15/10/2024" -> "15.10.2024")
         normalized = re.sub(r"(?<=\d)/(?=\d)", ".", normalized)
-        # 7. Извлекаем последовательности цифр с точками или запятыми
+        # 8. Извлекаем последовательности цифр с точками или запятыми
         tokens = re.findall(r"\b\d+(?:[.,]\d+)*\b", normalized)
         return {t.replace(",", ".").strip(".") for t in tokens if t.strip(".")}
 
@@ -227,6 +232,72 @@ UNVERIFIED_FACTS_DISCLAIMER = (
     "[Данные о сроках, суммах или статьях не подтверждены регламентом Портала и скрыты. "
     "Пожалуйста, обратитесь к оператору]"
 )
+
+
+def unwrap_json_if_needed(text: str) -> str:
+    """Если модель вернула ответ в формате JSON (например, со steps/notes),
+    разворачивает его в чистый структурированный Markdown.
+    """
+    cleaned = text.strip()
+    if cleaned.startswith("```json"):
+        cleaned = cleaned[7:].strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned[3:].strip()
+    if cleaned.endswith("```"):
+        cleaned = cleaned[:-3].strip()
+
+    if not cleaned.startswith("{"):
+        return text
+
+    try:
+        data = json.loads(cleaned)
+    except Exception:
+        match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+        if match:
+            try:
+                data = json.loads(match.group(0))
+            except Exception:
+                return text
+        else:
+            return text
+
+    ans = data.get("answer")
+    if not ans:
+        steps = data.get("steps")
+        notes = data.get("notes")
+        if steps or notes:
+            ans = {"steps": steps or [], "notes": notes or []}
+        else:
+            return text
+
+    if isinstance(ans, str):
+        return ans
+
+    if isinstance(ans, dict):
+        lines: list[str] = []
+        steps = ans.get("steps", [])
+        if isinstance(steps, list) and steps:
+            for i, step in enumerate(steps, 1):
+                lines.append(f"{i}. {step}")
+        elif isinstance(steps, str) and steps.strip():
+            lines.append(steps.strip())
+
+        notes = ans.get("notes", [])
+        if isinstance(notes, list) and notes:
+            if lines:
+                lines.append("")
+            lines.append("**Примечания:**")
+            for note in notes:
+                lines.append(f"- {note}")
+        elif isinstance(notes, str) and notes.strip():
+            if lines:
+                lines.append("")
+            lines.append(f"**Примечание:** {notes.strip()}")
+
+        if lines:
+            return "\n".join(lines)
+
+    return text
 
 
 class RagStreamGenerator:
@@ -282,7 +353,45 @@ class RagStreamGenerator:
                 timeout=self.timeout,
             )
 
+            is_json_mode = False
+            first_chunk_checked = False
+            json_buffer = ""
+
             async for token in stream:
+                if not first_chunk_checked:
+                    json_buffer += token
+                    stripped = json_buffer.strip()
+                    if stripped.startswith(("{", "```")):
+                        is_json_mode = True
+                    elif len(stripped) > 5:
+                        first_chunk_checked = True
+                        completed = buffer.feed(json_buffer)
+                        for sentence in completed:
+                            verified = self.guard.verify_sentence(
+                                sentence, chunks, query_numbers
+                            )
+                            text_to_emit = sentence
+                            if not verified:
+                                all_verified = False
+                                logger.warning(
+                                    "FactCheckingGuard: недостоверные факты в предложении '%s', скрываем текст.",
+                                    sentence,
+                                )
+                                text_to_emit = UNVERIFIED_FACTS_DISCLAIMER
+
+                            full_text_parts.append(text_to_emit)
+                            yield RagSentenceEventSchema(
+                                sentence_idx=sentence_idx,
+                                text=text_to_emit,
+                                verified=verified,
+                            )
+                            sentence_idx += 1
+                    continue
+
+                if is_json_mode:
+                    json_buffer += token
+                    continue
+
                 completed = buffer.feed(token)
                 for sentence in completed:
                     verified = self.guard.verify_sentence(
@@ -305,8 +414,17 @@ class RagStreamGenerator:
                     )
                     sentence_idx += 1
 
-            # Сбрасываем завершающий остаток буфера
-            tail_sentences = buffer.flush()
+            if is_json_mode:
+                unwrapped_markdown = unwrap_json_if_needed(json_buffer)
+                tail_sentences = (
+                    buffer.feed(unwrapped_markdown) + buffer.flush()
+                )
+            else:
+                if not first_chunk_checked and json_buffer:
+                    tail_sentences = buffer.feed(json_buffer) + buffer.flush()
+                else:
+                    tail_sentences = buffer.flush()
+
             for sentence in tail_sentences:
                 verified = self.guard.verify_sentence(
                     sentence, chunks, query_numbers

@@ -1,5 +1,7 @@
 """Системные промпты и шаблоны контекста RAG-генератора."""
 
+import re
+
 from src.rag.schemas import ContextChunk
 
 RAG_SYSTEM_PROMPT = """\
@@ -21,7 +23,28 @@ RAG_SYSTEM_PROMPT = """\
    - Деловой, нейтральный и лаконичный тон.
    - Используй форматирование Markdown (списки, абзацы). Не сплошным текстом.
    - Избегай общих вводных фраз без конкретики («Как известно», «В современном мире»).
+
+4. СТРОГИЙ ЗАПРЕТ ФОРМАТА JSON:
+   - Отвечай исключительно естественным языком с Markdown-разметкой.
+   - КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО оборачивать ответ в JSON, выводить поля вида {"query": ..., "answer": ..., "next_steps": ...} или программный код.
+   - Ответ должен сразу начинаться с текста сообщения пользователю.
 """
+
+
+def sanitize_history_text(text: str) -> str:
+    """Очищает реплику диалога от системных дисклеймеров и следов JSON."""
+    cleaned = re.sub(
+        r"\[Данные о сроках, суммах или статьях не подтверждены регламентом Портала и скрыты\.[^\]]*\]\s*",
+        "",
+        text,
+    )
+    if '"next_steps"' in cleaned or '"answer"' in cleaned:
+        ans_match = re.search(r'"answer"\s*:\s*"([^"]+)"', cleaned)
+        if ans_match:
+            cleaned = ans_match.group(1).replace("\\n", "\n")
+        else:
+            cleaned = re.sub(r'["\{\}\]]+', "", cleaned).strip()
+    return cleaned.strip()
 
 
 def format_context_chunk(idx: int, chunk: ContextChunk) -> str:
@@ -68,13 +91,17 @@ def format_rag_prompt(
             -6:
         ]:  # Ограничиваем окно последних реплик
             role = "Пользователь" if msg.get("role") == "user" else "Ассистент"
-            text = msg.get("text", "").strip()
+            raw_text = msg.get("text", "")
+            text = sanitize_history_text(raw_text)
             if text:
                 history_lines.append(f"{role}: {text}")
         if len(history_lines) > 1:
             user_parts.append("\n".join(history_lines))
 
-    user_parts.append(f"Вопрос пользователя:\n{query.strip()}")
+    user_parts.append(
+        f"Вопрос пользователя:\n{query.strip()}\n\n"
+        "Ответ ассистента-консультанта (отвечай строго связным текстом с Markdown-списками без JSON, без фигурных скобок и без технических полей):"
+    )
 
     user_prompt = "\n\n---\n\n".join(user_parts)
     return RAG_SYSTEM_PROMPT, user_prompt
