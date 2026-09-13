@@ -1,55 +1,10 @@
-# Git и система контроля версий
+﻿.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.ruff_cache
 .git
 .gitignore
-
-# Виртуальные окружения Python
-.venv
-venv/
-env/
-
-# Байткод и кэши
-__pycache__/
-*.py[cod]
-*$py.class
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
-
-# Конфигурационные файлы с секретами
-.env
-.env.*
-!.env.example
-
-# Отчеты тестирования и покрытия
-htmlcov/
-.tox/
-.coverage
-.coverage.*
-
-# Среды разработки
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-.cursor/
-
-# Документация и вспомогательные файлы
-docs/
-*.md
-
-# Файлы сборки и тесты
-Dockerfile*
-tests/
-dist/
-build/
-
-# Локальные данные и логи
-data/
-uploads/
-storage/
-temp/
-*.log
-*.sqlite
-*.sqlite3
-*.db
+tests

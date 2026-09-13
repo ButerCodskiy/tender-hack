@@ -14,6 +14,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { Message } from '../../types/chat';
+import { MarkdownView } from '../common/MarkdownView';
 
 interface ChatMessageProps {
   message: Message;
@@ -23,6 +24,7 @@ interface ChatMessageProps {
   onEscalateToOperator?: () => void;
   onFeedback?: (id: string, isPositive: boolean) => void;
   isEscalated?: boolean;
+  isModerationClosed?: boolean;
 }
 
 export const ChatMessage: React.FC<ChatMessageProps> = ({
@@ -33,6 +35,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   onEscalateToOperator,
   onFeedback,
   isEscalated = false,
+  isModerationClosed = false,
 }) => {
   const [isCopied, setIsCopied] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -85,13 +88,36 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 
   // 2. System State
   if (message.type === 'system' || message.sender_type === 'system') {
+    const isModerationAlert =
+      message.content.includes('нецензурн') ||
+      message.content.includes('правил общения') ||
+      message.content.includes('модерац');
+
     return (
-      <div className="my-3 flex justify-center">
-        <div className="max-w-xl px-4 py-2 rounded-none bg-[#fffbe6] border border-[#fbbd08]/50 text-[#1a1a1a] text-xs flex items-start gap-2.5">
-          <AlertTriangle className="size-4 text-[#f67319] shrink-0 mt-0.5" />
+      <div className="my-3 flex justify-center w-full">
+        <div
+          className={`max-w-xl w-full px-4 py-3 rounded-none border text-xs flex items-start gap-3 ${
+            isModerationAlert
+              ? 'bg-[#fff5f5] border-[#ffcdd2] text-[#b71c1c]'
+              : 'bg-[#fffbe6] border-[#fbbd08]/50 text-[#1a1a1a]'
+          }`}
+        >
+          <AlertTriangle
+            className={`size-4 shrink-0 mt-0.5 ${
+              isModerationAlert ? 'text-[#c62828]' : 'text-[#f67319]'
+            }`}
+          />
           <div>
-            <span className="font-bold block mb-0.5 text-[#1a1a1a]">Системное уведомление</span>
-            <p className="leading-relaxed text-[#555555]">{message.content}</p>
+            <span
+              className={`font-bold block mb-0.5 ${
+                isModerationAlert ? 'text-[#c62828]' : 'text-[#1a1a1a]'
+              }`}
+            >
+              {isModerationAlert ? 'Блокировка диалога модерацией' : 'Системное уведомление'}
+            </span>
+            <p className={`leading-relaxed ${isModerationAlert ? 'text-[#5c0000]' : 'text-[#555555]'}`}>
+              {message.content}
+            </p>
           </div>
         </div>
       </div>
@@ -100,11 +126,21 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 
   // 3. User Message (Поставщик)
   if (message.type === 'user' || message.sender_type === 'client') {
+    const isBlocked =
+      message.moderation_status === 'blocked' ||
+      message.moderation_reason === 'profanity';
+
     return (
       <div className="flex justify-end py-2 group w-full min-w-0">
         <div className="w-full max-w-2xl flex flex-col items-end min-w-0">
           <div className="flex items-center gap-1.5 mb-1 mr-1">
             <span className="text-[11px] font-bold text-[#7f8792]">Вы (Поставщик)</span>
+            {isBlocked && (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-none bg-[#ffebee] text-[#c62828] border border-[#ffcdd2] flex items-center gap-1">
+                <AlertTriangle className="size-3 text-[#c62828]" />
+                Заблокировано модерацией
+              </span>
+            )}
           </div>
           {isEditing ? (
             <div className="w-full bg-white rounded-none p-3 border border-[#264b82]">
@@ -135,8 +171,14 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
             </div>
           ) : (
             <>
-              <div className="bg-[#eaf6ff] border border-[#b9dbf7] rounded-none px-4 py-3 text-[#1a1a1a] text-[14px] max-w-full min-w-0 break-words">
-                <p className="whitespace-pre-wrap leading-relaxed break-words [overflow-wrap:anywhere]">{message.content}</p>
+              <div
+                className={`rounded-none px-4 py-3 text-[14px] max-w-full min-w-0 break-words ${
+                  isBlocked
+                    ? 'bg-[#fff5f5] border border-[#ffcdd2] text-[#c62828]'
+                    : 'bg-[#eaf6ff] border border-[#b9dbf7] text-[#1a1a1a]'
+                }`}
+              >
+                <MarkdownView content={message.content} />
               </div>
 
               {/* Action Buttons */}
@@ -152,7 +194,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                   {isCopied ? <Check className="size-3.5 text-[#0d9b68]" /> : <Copy className="size-3.5" />}
                 </button>
 
-                {onEditMessage && (
+                {onEditMessage && !isBlocked && !isModerationClosed && (
                   <button
                     type="button"
                     onClick={() => setIsEditing(true)}
@@ -233,15 +275,17 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 
       {/* Message Content Bubble */}
       <div className={`bg-white border border-[#e5e5e5] ${senderConfig.bubbleBorderClass} rounded-none p-4 text-[#1a1a1a] text-[14px] leading-relaxed space-y-3 min-w-0`}>
-        <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-          {message.content}
-          {message.isStreaming && (
+        {message.isStreaming ? (
+          <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+            {message.content}
             <span
               aria-hidden="true"
               className="inline-block w-1.5 h-4 ml-1 bg-[#db2b21] animate-pulse align-middle"
             />
-          )}
-        </div>
+          </div>
+        ) : (
+          <MarkdownView content={message.content} />
+        )}
 
         {/* RAG Citations */}
         {message.citations && message.citations.length > 0 && (
@@ -298,8 +342,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                 )}
               </button>
 
-              {/* Only show regenerate for bot messages */}
-              {isBot && onRegenerate && (
+              {/* Only show regenerate for bot messages if chat is not closed by moderation */}
+              {isBot && onRegenerate && !isModerationClosed && (
                 <button
                   type="button"
                   onClick={() => onRegenerate(message.id)}
@@ -346,52 +390,54 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
             </div>
 
             {/* Business Action Buttons: Вопрос решен / Позвать специалиста */}
-            {message.needsFeedbackButtons ? (
-              <div className="flex items-center gap-2">
-                {onResolveTicket && (
-                  <button
-                    type="button"
-                    onClick={onResolveTicket}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-none text-xs font-bold text-[#0d9b68] bg-transparent hover:bg-[#e7f8f2] border border-[#0d9b68] transition cursor-pointer"
-                  >
-                    <CheckCircle2 className="size-3.5 text-[#0d9b68]" />
-                    <span>Вопрос решен</span>
-                  </button>
-                )}
-
-                {isBot && onEscalateToOperator && (
-                  isEscalated ? (
-                    <span
-                      title="Специалист уже вызван и подключается к диалогу"
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-none text-xs font-bold bg-[#eeeeee] text-[#7f8792] border border-[#d4d4d5] cursor-not-allowed select-none"
-                    >
-                      <Headphones className="size-3.5 text-[#7f8792]" />
-                      <span>Специалист вызван</span>
-                    </span>
-                  ) : (
+            {!isModerationClosed && (
+              message.needsFeedbackButtons ? (
+                <div className="flex items-center gap-2">
+                  {onResolveTicket && (
                     <button
                       type="button"
-                      onClick={onEscalateToOperator}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-none text-xs font-bold text-[#264b82] bg-transparent hover:bg-[#eaf6ff] border border-[#264b82] transition cursor-pointer"
+                      onClick={onResolveTicket}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-none text-xs font-bold text-[#0d9b68] bg-transparent hover:bg-[#e7f8f2] border border-[#0d9b68] transition cursor-pointer"
                     >
-                      <Headphones className="size-3.5 text-[#264b82]" />
-                      <span>Позвать специалиста</span>
+                      <CheckCircle2 className="size-3.5 text-[#0d9b68]" />
+                      <span>Вопрос решен</span>
                     </button>
-                  )
-                )}
-              </div>
-            ) : (
-              !isBot && onResolveTicket && (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={onResolveTicket}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-none text-xs font-bold text-[#0d9b68] bg-transparent hover:bg-[#e7f8f2] border border-[#0d9b68] transition cursor-pointer"
-                  >
-                    <CheckCircle2 className="size-3.5 text-[#0d9b68]" />
-                    <span>Вопрос решен</span>
-                  </button>
+                  )}
+
+                  {isBot && onEscalateToOperator && (
+                    isEscalated ? (
+                      <span
+                        title="Специалист уже вызван и подключается к диалогу"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-none text-xs font-bold bg-[#eeeeee] text-[#7f8792] border border-[#d4d4d5] cursor-not-allowed select-none"
+                      >
+                        <Headphones className="size-3.5 text-[#7f8792]" />
+                        <span>Специалист вызван</span>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={onEscalateToOperator}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-none text-xs font-bold text-[#264b82] bg-transparent hover:bg-[#eaf6ff] border border-[#264b82] transition cursor-pointer"
+                      >
+                        <Headphones className="size-3.5 text-[#264b82]" />
+                        <span>Позвать специалиста</span>
+                      </button>
+                    )
+                  )}
                 </div>
+              ) : (
+                !isBot && onResolveTicket && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={onResolveTicket}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-none text-xs font-bold text-[#0d9b68] bg-transparent hover:bg-[#e7f8f2] border border-[#0d9b68] transition cursor-pointer"
+                    >
+                      <CheckCircle2 className="size-3.5 text-[#0d9b68]" />
+                      <span>Вопрос решен</span>
+                    </button>
+                  </div>
+                )
               )
             )}
           </div>

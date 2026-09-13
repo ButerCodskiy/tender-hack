@@ -107,6 +107,16 @@ class MessageResponseSchema(BaseModel):
         description="Статус модерации: passed, flagged, blocked",
         examples=["passed"],
     )
+    moderation_reason: str | None = Field(
+        default=None,
+        description="Причина решения модерации (например, profanity)",
+        examples=["profanity"],
+    )
+    ticket_status: str | None = Field(
+        default=None,
+        description="Статус обращения, к которому привязана реплика",
+        examples=["closed_by_moderation"],
+    )
     sources: list[MessageSourceResponseSchema] = Field(
         default_factory=list,
         description="Источники ответа из нормативной базы знаний",

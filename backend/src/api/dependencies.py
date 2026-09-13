@@ -15,6 +15,7 @@ from src.auth.models import UserModel, UserRole
 from src.auth.repository import UserRepository
 from src.auth.service import AuthService
 from src.chat.repository import ChatRepository, TicketRepository
+from src.chat.router import EscalationRouter
 from src.chat.service import ChatService
 from src.core.redis_client import (
     RedisChatContext,
@@ -141,6 +142,16 @@ RedisTicketEventsDep = Annotated[
 ]
 
 
+def get_escalation_router() -> EscalationRouter:
+    """Провайдер классификатора линий поддержки при эскалации."""
+    return EscalationRouter()
+
+
+EscalationRouterDep = Annotated[
+    EscalationRouter, Depends(get_escalation_router)
+]
+
+
 async def get_chat_service(
     repo: ChatRepositoryDep,
     session: SessionDep,
@@ -149,6 +160,7 @@ async def get_chat_service(
     redis_context: RedisContextDep,
     ticket_events: RedisTicketEventsDep,
     line_queue: RedisLineQueueDep,
+    escalation_router: EscalationRouterDep,
 ) -> ChatService:
     """Провайдер сервиса диалогов ChatService."""
     return ChatService(
@@ -159,6 +171,7 @@ async def get_chat_service(
         redis_context=redis_context,
         ticket_events=ticket_events,
         line_queue=line_queue,
+        escalation_router=escalation_router,
     )
 
 
