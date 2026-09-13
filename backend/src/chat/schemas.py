@@ -1,7 +1,7 @@
 """Схемы валидации данных домена chat."""
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -29,6 +29,21 @@ class ClientSendMessageRequestSchema(BaseModel):
         description="Признак принудительного создания новой сессии обращения",
         examples=[False],
     )
+
+    @field_validator("ticket_id", mode="before")
+    @classmethod
+    def validate_ticket_id(cls, value: Any) -> UUID | None:
+        """Мягко сбрасывает псевдо-идентификаторы сессий фронтенда (session-*)."""
+        if not value:
+            return None
+        if isinstance(value, UUID):
+            return value
+        if isinstance(value, str):
+            try:
+                return UUID(value)
+            except (ValueError, AttributeError):
+                return None
+        return None
 
     @field_validator("text")
     @classmethod

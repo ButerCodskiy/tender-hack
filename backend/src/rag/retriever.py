@@ -22,7 +22,7 @@ class Retriever:
     def __init__(
         self,
         embedding_model: EmbeddingStub | None = None,
-        top_k: int = 10,
+        top_k: int = 5,
         qdrant_client: AsyncQdrantClient | None = None,
     ):
         self.embedding_model = embedding_model or EmbeddingStub(dim=1024)

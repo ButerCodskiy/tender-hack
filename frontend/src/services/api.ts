@@ -113,6 +113,9 @@ export async function streamChatMessage(
   const controller = new AbortController();
   let timeoutId = setTimeout(() => controller.abort(), 120000);
 
+  const isUuid = (id?: string | null) =>
+    !!id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
   try {
     const res = await fetch('/api/v1/chat/messages', {
       method: 'POST',
@@ -123,7 +126,7 @@ export async function streamChatMessage(
       },
       body: JSON.stringify({
         text: payload.content.trim(),
-        ticket_id: payload.ticketId || undefined,
+        ticket_id: isUuid(payload.ticketId) ? payload.ticketId : undefined,
         new_ticket: payload.newTicket || false,
       }),
       signal: controller.signal,

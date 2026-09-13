@@ -71,7 +71,7 @@ class Settings(BaseSettings):
     KB_STORAGE_DIR: Path = BASE_DIR / "storage" / "kb_documents"
 
     # Ollama и генеративный контур (RTX 4060 Host)
-    OLLAMA_BASE_URL: str = "http://192.168.1.244:9117"
+    OLLAMA_BASE_URL: str = "http://100.65.5.123:9117"
     OLLAMA_MODEL: str = "qwen3.5:4b-instruct"
     OLLAMA_TIMEOUT_SECONDS: float = 300.0
 

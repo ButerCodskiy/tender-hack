@@ -144,7 +144,7 @@ class RagStatusEventSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     event: Literal["status"] = "status"
-    code: Literal["classifying", "searching", "reranking"] = Field(
+    code: Literal["classifying", "searching", "reranking", "generating"] = Field(
         ...,
         description="Код этапа размышления конвейера",
         examples=["searching"],
