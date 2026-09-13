@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.models import UserModel
 from src.chat.models import (
+    TERMINAL_TICKET_STATUSES,
     ChatModel,
     MessageModel,
     MessageModerationStatus,
@@ -19,7 +20,6 @@ from src.chat.models import (
     TicketModel,
     TicketPriority,
     TicketStatus,
-    TERMINAL_TICKET_STATUSES,
 )
 from src.chat.moderation import (
     ProfanityModerator,

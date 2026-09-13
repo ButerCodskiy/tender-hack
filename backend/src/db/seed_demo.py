@@ -1026,7 +1026,9 @@ async def seed() -> None:
                     session.add(copilot_s)
 
             await session.flush()
-            logger.info("Активные обращения для операторов L1, L2, L3 успешно созданы.")
+            logger.info(
+                "Активные обращения для операторов L1, L2, L3 успешно созданы."
+            )
 
         # Авто-сидирование базы знаний (kb_documents, kb_nodes)
         stmt_kb = select(func.count()).select_from(KbDocumentModel)

@@ -462,4 +462,3 @@ async def test_send_operator_message_to_closed_ticket_raises(
     assert exc_info.value.status_code == 400
     assert "уже завершено" in exc_info.value.detail
     repo.save_message.assert_not_called()
-
