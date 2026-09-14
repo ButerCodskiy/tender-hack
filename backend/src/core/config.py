@@ -70,9 +70,9 @@ class Settings(BaseSettings):
     # Хранилище документов базы знаний
     KB_STORAGE_DIR: Path = BASE_DIR / "storage" / "kb_documents"
 
-    # Ollama и генеративный контур (RTX 4060 Host)
-    OLLAMA_BASE_URL: str = "http://192.168.1.244:9117"
-    OLLAMA_MODEL: str = "qwen3.5:4b-instruct"
+    # Ollama и генеративный контур (Local AMD RX 6600 / Localhost)
+    OLLAMA_BASE_URL: str = "http://127.0.0.1:11434"
+    OLLAMA_MODEL: str = "qwen3:8b-rag"
     OLLAMA_TIMEOUT_SECONDS: float = 60.0
 
     # Эмбеддинги (bge-m3 1024D)

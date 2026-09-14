@@ -103,6 +103,12 @@ class RagService:
         await asyncio.sleep(0.01)
 
         # 4. Потоковая генерация предложений с инлайн-валидацией через RagStreamGenerator
+        yield RagStatusEventSchema(
+            code="generating",
+            message="Формирование ответа нейросетью...",
+        )
+        await asyncio.sleep(0.01)
+
         async for event in self.generator.generate_response_stream(
             query=payload.query,
             chunks=chunks,
