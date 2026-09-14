@@ -22,7 +22,7 @@ class Retriever:
     def __init__(
         self,
         embedding_model: EmbeddingStub | None = None,
-        top_k: int = 10,
+        top_k: int = 30,
         qdrant_client: AsyncQdrantClient | None = None,
     ):
         self.embedding_model = embedding_model or EmbeddingStub(dim=1024)
@@ -193,22 +193,15 @@ class Retriever:
                     f"Не удалось выполнить гидратацию из kb_nodes: {exc_db}"
                 )
 
-        # 5. Формирование обогащенных источников с полным родительским контекстом
+        # 5. Формирование обогащенных источников с привязкой к родительским узлам
         sources: list[RagSourceChunkSchema] = []
-        seen_nodes: set[str] = set()
 
         for point in filtered_points:
             if not point.payload:
                 continue
 
             node_id = str(point.payload.get("node_id", ""))
-            if node_id and node_id in seen_nodes:
-                # Дедупликация родительских секций
-                continue
-            if node_id:
-                seen_nodes.add(node_id)
-
-            parent_node = nodes_map.get(node_id)
+            parent_node = nodes_map.get(node_id) if node_id else None
             if parent_node:
                 quote_text = parent_node.content_markdown
                 if quote_text and len(quote_text) > 6000:
@@ -240,6 +233,7 @@ class Retriever:
             sources.append(
                 RagSourceChunkSchema(
                     chunk_id=str(point.payload.get("chunk_id", point.id)),
+                    node_id=node_id or None,
                     doc_id=doc_id,
                     title=title,
                     quote_text=quote_text,

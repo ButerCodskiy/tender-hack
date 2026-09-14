@@ -62,6 +62,11 @@ class RagSourceChunkSchema(BaseModel):
         description="Уникальный идентификатор фрагмента в базе знаний",
         examples=["chunk_mos_portal_reglament_p4_1"],
     )
+    node_id: str | None = Field(
+        default=None,
+        description="Идентификатор родительского узла/статьи в kb_nodes",
+        examples=["NODE_portal_reglament_sec4"],
+    )
     doc_id: str = Field(
         ...,
         description="Идентификатор исходного документа регламента",

@@ -48,7 +48,7 @@ from src.rag.service import RagService
 
 
 def test_lexical_dense_reranker_scoring_and_sorting() -> None:
-    """Проверяет формулу S_final = 0.60 * S_dense + 0.40 * R_lex и переранжирование."""
+    """Проверяет формулу Weighted RRF (ADR_RERANKER) и корректную сортировку."""
     reranker = LexicalDenseReranker(dense_weight=0.60, lexical_weight=0.40)
 
     # Чанк A: высокий dense (0.90), но нулевой lexical overlap с запросом
@@ -74,13 +74,12 @@ def test_lexical_dense_reranker_scoring_and_sorting() -> None:
     query = "протокол разногласий"
     reranked = reranker.rerank(query, [chunk_a, chunk_b])
 
-    # Для chunk_a: lex = 0/2 = 0.0 -> score = 0.60 * 0.90 + 0 = 0.54
-    # Для chunk_b: lex = 2/2 = 1.0 -> score = 0.60 * 0.70 + 0.40 * 1.0 = 0.82
+    # В RRF с весом dense=0.60 (ранг 1) и lexical=0.40 (ранг 2 для chunk_a):
+    # chunk_a: 0.60/61 + 0.40/62 = 0.0163
+    # chunk_b: 0.60/62 + 0.40/61 = 0.0162
     assert len(reranked) == 2
-    assert reranked[0].chunk_id == "chunk_b"
-    assert reranked[0].relevance_score == 0.82
-    assert reranked[1].chunk_id == "chunk_a"
-    assert reranked[1].relevance_score == 0.54
+    assert reranked[0].chunk_id == "chunk_a"
+    assert reranked[1].chunk_id == "chunk_b"
 
 
 def test_lexical_dense_reranker_empty_chunks() -> None:

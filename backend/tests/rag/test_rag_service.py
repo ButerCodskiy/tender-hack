@@ -60,8 +60,8 @@ async def test_generate_answer_stream_flow() -> None:
     async for event in service.generate_answer(payload):
         events.append(event)
 
-    # Проверка общего количества событий (3 status + 1 sources + 2 sentence + 1 done)
-    assert len(events) == 7
+    # Проверка общего количества событий (4 status + 1 sources + 2 sentence + 1 done)
+    assert len(events) == 8
 
     # 1. Проверка событий status
     assert isinstance(events[0], RagStatusEventSchema)
@@ -86,26 +86,31 @@ async def test_generate_answer_stream_flow() -> None:
     assert chunk.quote_text is not None
     assert chunk.relevance_score is not None
 
-    # 3. Проверка предложений sentence
-    assert isinstance(events[4], RagSentenceEventSchema)
-    assert events[4].event == "sentence"
-    assert events[4].sentence_idx == 0
-    assert events[4].verified is True
-    assert "протокол разногласий" in events[4].text
+    # 3. Проверка статуса generating
+    assert isinstance(events[4], RagStatusEventSchema)
+    assert events[4].event == "status"
+    assert events[4].code == "generating"
 
+    # 4. Проверка предложений sentence
     assert isinstance(events[5], RagSentenceEventSchema)
     assert events[5].event == "sentence"
-    assert events[5].sentence_idx == 1
+    assert events[5].sentence_idx == 0
     assert events[5].verified is True
-    assert "[^1]" in events[5].text
+    assert "протокол разногласий" in events[5].text
 
-    # 4. Проверка события done
-    assert isinstance(events[6], RagDoneEventSchema)
-    assert events[6].event == "done"
-    assert events[6].message_id == message_id
-    assert events[6].all_verified is True
-    assert events[4].text in events[6].text
-    assert events[5].text in events[6].text
+    assert isinstance(events[6], RagSentenceEventSchema)
+    assert events[6].event == "sentence"
+    assert events[6].sentence_idx == 1
+    assert events[6].verified is True
+    assert "[^1]" in events[6].text
+
+    # 5. Проверка события done
+    assert isinstance(events[7], RagDoneEventSchema)
+    assert events[7].event == "done"
+    assert events[7].message_id == message_id
+    assert events[7].all_verified is True
+    assert events[5].text in events[7].text
+    assert events[6].text in events[7].text
 
 
 async def test_generate_answer_degraded_mode_when_no_chunks() -> None:
@@ -128,7 +133,9 @@ async def test_generate_answer_degraded_mode_when_no_chunks() -> None:
 async def test_generate_answer_without_message_id() -> None:
     """Проверяет генерацию ответа без предварительно заданного message_id."""
     service = _get_mock_service()
-    payload = RagQueryRequestSchema(query="Как пройти регистрацию?")
+    payload = RagQueryRequestSchema(
+        query="Как подписать протокол разногласий?"
+    )
 
     events: list[RagStreamEvent] = []
     async for event in service.generate_answer(payload):

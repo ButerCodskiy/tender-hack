@@ -96,8 +96,18 @@ class RagService:
             )
             return
 
-        # 3. Переранжирование найденных фрагментов
-        chunks = self.reranker.rerank(payload.query, chunks)
+        # 3. Переранжирование найденных фрагментов с динамическим порогом и дедупликацией
+        chunks = self.reranker.rerank(payload.query, chunks, max_parents=5)
+
+        if not chunks:
+            yield RagDegradedModeEventSchema(
+                message=(
+                    "В нормативной базе Портала поставщиков Москвы не найдена информация по вашему вопросу. "
+                    "Рекомендуем уточнить формулировку или обратиться к специалисту поддержки."
+                ),
+                sources=[],
+            )
+            return
 
         yield RagSourcesEventSchema(sources=chunks)
         await asyncio.sleep(0.01)

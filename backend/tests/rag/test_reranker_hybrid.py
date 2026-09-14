@@ -1,15 +1,20 @@
-"""Юнит-тесты гибридного реранкера (ADR-0001, ADR-0006: Weighted Dense + Lexical Keyword Match)."""
+"""Юнит-тесты гибридного реранкера (ADR-0001, ADR-0006, ADR_RERANKER: Weighted RRF + Dynamic Threshold + Parent Aggregation)."""
 
-from src.rag.reranker import HybridReranker, LexicalDenseReranker
+from src.rag.reranker import (
+    HybridReranker,
+    LexicalDenseReranker,
+    aggregate_parent_articles,
+    calculate_dynamic_threshold,
+    compute_weighted_rrf,
+    reorder_lost_in_middle,
+)
 from src.rag.schemas import ContextChunk
 
 
 def test_hybrid_reranker_weights_formula() -> None:
-    """Проверяет расчет по формуле S = 0.65 * S_dense + 0.35 * S_lexical."""
+    """Проверяет расчет по формуле Weighted RRF (k=60, w_dense=0.65, w_lex=0.35)."""
     reranker = LexicalDenseReranker()  # По умолчанию: 0.65 / 0.35
 
-    # Чанк 1: dense = 0.80, запрос из 2 слов, совпадает 1 слово -> lex = 0.50
-    # Ожидаемый скор = 0.65 * 0.80 + 0.35 * 0.50 = 0.52 + 0.175 = 0.695
     chunk1 = ContextChunk(
         chunk_id="chunk_1",
         doc_id="DOC_1",
@@ -23,7 +28,9 @@ def test_hybrid_reranker_weights_formula() -> None:
     reranked = reranker.rerank(query, [chunk1])
 
     assert len(reranked) == 1
-    assert reranked[0].relevance_score == 0.695
+    # Для единственного чанка: ранг dense=1, ранг lex=1
+    # Score = 0.65 / (60 + 1) + 0.35 / (60 + 1) = 1.0 / 61 = 0.01639 -> 0.0164
+    assert reranked[0].relevance_score == 0.0164
 
 
 def test_exact_hex_error_code_boost() -> None:
@@ -108,3 +115,105 @@ def test_empty_chunks_and_boundary_scores() -> None:
     )
     result = reranker.rerank("ст. 34 44-ФЗ 0x80070005", [chunk_max])
     assert result[0].relevance_score <= 1.0
+
+
+def test_dynamic_threshold_calculation() -> None:
+    """Проверяет динамический порог отсечения Cross-Encoder и bypass-правила (ADR_RERANKER)."""
+    # 1. Короткий запрос -> минимальный floor порог
+    t_short, bypass_short = calculate_dynamic_threshold("штрафы")
+    assert t_short == 0.28
+    assert bypass_short is False
+
+    # 2. Системный hex-код ошибки -> bypass True, floor 0.28
+    t_hex, bypass_hex = calculate_dynamic_threshold(
+        "Ошибка 0x80070005 в плагине"
+    )
+    assert t_hex == 0.28
+    assert bypass_hex is True
+
+    # 3. Статья закона 44-ФЗ -> bypass True, floor 0.28
+    t_law, bypass_law = calculate_dynamic_threshold("порядок по ст. 93 44-фз")
+    assert t_law == 0.28
+    assert bypass_law is True
+
+    # 4. Длинный сложный запрос -> порог возрастает для отсечения шума
+    t_long, bypass_long = calculate_dynamic_threshold(
+        "подробный регламент обжалования протокола разногласий заказчика поставщиком при закупках малого объема"
+    )
+    assert t_long >= 0.40
+    assert bypass_long is False
+
+
+def test_parent_aggregation_and_deduplication() -> None:
+    """Проверяет дедупликацию дочерних чанков в родительские статьи и расчет S_parent."""
+    # 3 дочерних чанка одной статьи (node_id = 'NODE_ART93')
+    c1 = ContextChunk(
+        chunk_id="c1",
+        node_id="NODE_ART93",
+        doc_id="44FZ",
+        title="Статья 93",
+        section_path="44-ФЗ > Ст 93",
+        quote_text="Текст 1",
+        relevance_score=0.85,
+    )
+    c2 = ContextChunk(
+        chunk_id="c2",
+        node_id="NODE_ART93",
+        doc_id="44FZ",
+        title="Статья 93",
+        section_path="44-ФЗ > Ст 93",
+        quote_text="Текст 2",
+        relevance_score=0.70,
+    )
+    c3 = ContextChunk(
+        chunk_id="c3",
+        node_id="NODE_ART93",
+        doc_id="44FZ",
+        title="Статья 93",
+        section_path="44-ФЗ > Ст 93",
+        quote_text="Текст 3",
+        relevance_score=0.50,
+    )
+    # 1 дочерний чанк другой статьи (node_id = 'NODE_ART34')
+    c4 = ContextChunk(
+        chunk_id="c4",
+        node_id="NODE_ART34",
+        doc_id="44FZ",
+        title="Статья 34",
+        section_path="44-ФЗ > Ст 34",
+        quote_text="Текст 4",
+        relevance_score=0.80,
+    )
+
+    parents = aggregate_parent_articles([c1, c2, c3, c4], max_parents=5)
+
+    assert len(parents) == 2
+    # Статья 93 должна быть топ-1 благодаря сумме скоров вторичных чанков
+    assert parents[0].node_id == "NODE_ART93"
+    assert parents[0].relevance_score > 0.85
+    assert parents[1].node_id == "NODE_ART34"
+
+
+def test_reorder_lost_in_middle() -> None:
+    """Проверяет U-образную раскладку статей [1, 3, 5, 4, 2] для защиты от Lost-in-the-Middle."""
+    articles = [f"Art_{i}" for i in range(1, 6)]
+    reordered = reorder_lost_in_middle(articles)
+    assert reordered == ["Art_1", "Art_3", "Art_5", "Art_4", "Art_2"]
+
+
+def test_compute_weighted_rrf_formula() -> None:
+    """Проверяет расчет по формуле compute_weighted_rrf с весами 0.65 и 0.35."""
+    dense_ranks = {"doc_a": 1, "doc_b": 2}
+    lexical_ranks = {"doc_a": 2, "doc_b": 1}
+
+    rrf = compute_weighted_rrf(
+        dense_ranks=dense_ranks,
+        lexical_ranks=lexical_ranks,
+        k=60,
+        w_dense=0.65,
+        w_lex=0.35,
+    )
+    # doc_a: 0.65/(60+1) + 0.35/(60+2) = 0.65/61 + 0.35/62 = 0.0106557 + 0.00564516 = 0.01630086
+    # doc_b: 0.65/(60+2) + 0.35/(60+1) = 0.65/62 + 0.35/61 = 0.0104838 + 0.00573770 = 0.01622150
+    assert rrf["doc_a"] > rrf["doc_b"]
+    assert round(rrf["doc_a"], 5) == round(0.65 / 61 + 0.35 / 62, 5)
