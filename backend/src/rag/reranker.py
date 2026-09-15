@@ -133,9 +133,11 @@ def aggregate_parent_articles(
 
         aggregated = best_chunk.model_copy(
             update={
+                "is_parent": True,
                 "node_id": best_chunk.node_id or parent_key,
                 "relevance_score": parent_score,
                 "pin_to_top": has_pin,
+                "highlight_quote": best_chunk.quote_text,
             }
         )
         parent_chunks.append(aggregated)
@@ -148,6 +150,131 @@ def aggregate_parent_articles(
         reverse=True,
     )
     return parent_chunks[:max_parents]
+
+
+def select_hybrid_hierarchical_sources(
+    candidate_chunks: list[ContextChunk],
+    max_parents: int = 2,
+    max_small: int = 2,
+) -> list[ContextChunk]:
+    """Формирует иерархический гибрид источников: до max_parents родительских документов (Big)
+    и до max_small атомарных чанков (Small), суммарно до (max_parents + max_small).
+
+    Для родительских документов устанавливается is_parent=True и заполняется highlight_quote.
+    Для малых чанков сохраняется исходный текст и context_prefix (is_parent=False).
+    """
+    if not candidate_chunks:
+        return []
+
+    # 1. Группировка по родительскому ключу (node_id -> section_path -> doc_id)
+    grouped: dict[str, list[ContextChunk]] = {}
+    for chunk in candidate_chunks:
+        parent_key = (
+            chunk.node_id
+            or chunk.section_path
+            or (
+                f"{chunk.doc_id}_{chunk.title}"
+                if chunk.doc_id
+                else chunk.chunk_id
+            )
+        )
+        grouped.setdefault(parent_key, []).append(chunk)
+
+    parent_groups: list[tuple[str, ContextChunk, float, bool]] = []
+    for parent_key, group in grouped.items():
+        group.sort(
+            key=lambda c: (
+                1 if c.pin_to_top else 0,
+                c.relevance_score if c.relevance_score is not None else 0.0,
+            ),
+            reverse=True,
+        )
+        best_chunk = group[0]
+        s_max = (
+            best_chunk.relevance_score
+            if best_chunk.relevance_score is not None
+            else 0.0
+        )
+        s_other_sum = sum(
+            (c.relevance_score if c.relevance_score is not None else 0.0)
+            for c in group[1:]
+        )
+        has_pin = any(c.pin_to_top for c in group)
+        parent_score = (
+            1.0
+            if has_pin
+            else min(1.0, round(s_max + 0.10 * math.log(1.0 + s_other_sum), 4))
+        )
+        parent_groups.append((parent_key, best_chunk, parent_score, has_pin))
+
+    parent_groups.sort(
+        key=lambda item: (
+            1 if item[3] else 0,
+            item[2],
+        ),
+        reverse=True,
+    )
+
+    selected: list[ContextChunk] = []
+    used_parent_keys: set[str] = set()
+
+    # 2. Отбор топ-max_parents как Big (родительские статьи)
+    for parent_key, best_chunk, parent_score, has_pin in parent_groups[
+        :max_parents
+    ]:
+        used_parent_keys.add(parent_key)
+        big_chunk = best_chunk.model_copy(
+            update={
+                "is_parent": True,
+                "node_id": best_chunk.node_id or parent_key,
+                "relevance_score": parent_score,
+                "pin_to_top": has_pin,
+                "highlight_quote": best_chunk.quote_text,
+            }
+        )
+        selected.append(big_chunk)
+
+    # 3. Отбор до max_small атомарных чанков из оставшихся документов
+    small_candidates = [
+        c
+        for c in candidate_chunks
+        if (
+            c.node_id
+            or c.section_path
+            or (f"{c.doc_id}_{c.title}" if c.doc_id else c.chunk_id)
+        )
+        not in used_parent_keys
+    ]
+    for sc in small_candidates[:max_small]:
+        small_chunk = sc.model_copy(
+            update={
+                "is_parent": False,
+                "highlight_quote": sc.quote_text,
+            }
+        )
+        selected.append(small_chunk)
+
+    # 4. Если малых чанков из других документов нет, добираем из оставшихся родителей
+    if len(selected) < (max_parents + max_small):
+        limit = (max_parents + max_small) - len(selected)
+        for parent_key, best_chunk, parent_score, has_pin in parent_groups[
+            max_parents:
+        ][:limit]:
+            if parent_key not in used_parent_keys:
+                used_parent_keys.add(parent_key)
+                selected.append(
+                    best_chunk.model_copy(
+                        update={
+                            "is_parent": True,
+                            "node_id": best_chunk.node_id or parent_key,
+                            "relevance_score": parent_score,
+                            "pin_to_top": has_pin,
+                            "highlight_quote": best_chunk.quote_text,
+                        }
+                    )
+                )
+
+    return selected
 
 
 def reorder_lost_in_middle[T](items: list[T]) -> list[T]:
@@ -342,11 +469,13 @@ class LexicalDenseReranker:
             reverse=True,
         )
 
-        # 5. Агрегация в родительские статьи и Lost-in-the-Middle
-        parents = aggregate_parent_articles(
-            candidate_chunks, max_parents=max_parents
+        # 5. Иерархический гибрид (2 Big + 2 Small) и Lost-in-the-Middle
+        num_parents = min(2, max_parents)
+        num_small = max(0, max_parents - num_parents)
+        sources = select_hybrid_hierarchical_sources(
+            candidate_chunks, max_parents=num_parents, max_small=num_small
         )
-        return reorder_lost_in_middle(parents)
+        return reorder_lost_in_middle(sources)
 
 
 # Алиас для спецификаций
@@ -524,11 +653,13 @@ class TransformerCrossEncoderReranker(LexicalDenseReranker):
             reverse=True,
         )
 
-        # 5. Агрегация в родительские статьи и Lost-in-the-Middle
-        parents = aggregate_parent_articles(
-            surviving_chunks, max_parents=max_parents
+        # 5. Иерархический гибрид (2 Big + 2 Small) и Lost-in-the-Middle
+        num_parents = min(2, max_parents)
+        num_small = max(0, max_parents - num_parents)
+        sources = select_hybrid_hierarchical_sources(
+            surviving_chunks, max_parents=num_parents, max_small=num_small
         )
-        return reorder_lost_in_middle(parents)
+        return reorder_lost_in_middle(sources)
 
 
 # Алиасы для спецификаций

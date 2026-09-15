@@ -174,26 +174,27 @@ class Retriever:
                 if nid not in node_ids:
                     node_ids.append(nid)
 
-        # 4. Гидратация полных родительских узлов AST из PostgreSQL (kb_nodes)
+        # 4. Проверка метаданных родительских узлов AST из PostgreSQL (kb_nodes)
         nodes_map: dict[str, Any] = {}
         if node_ids:
             try:
                 async with async_session_maker() as session:
                     res = await session.execute(
                         text(
-                            "SELECT id, content_markdown, section_path, title, doc_id "
-                            "FROM kb_nodes WHERE id = ANY(:node_ids)"
+                            "SELECT node_id, full_content, section_path, title, doc_id, table_md "
+                            "FROM kb_nodes WHERE node_id = ANY(:node_ids)"
                         ),
                         {"node_ids": node_ids},
                     )
                     for row in res:
-                        nodes_map[str(row.id)] = row
+                        nodes_map[str(row.node_id)] = row
             except Exception as exc_db:
-                logger.warning(
-                    f"Не удалось выполнить гидратацию из kb_nodes: {exc_db}"
+                logger.debug(
+                    "Retriever: выборка из kb_nodes пропущена (фолбэк на payload Qdrant): %s",
+                    exc_db,
                 )
 
-        # 5. Формирование обогащенных источников с привязкой к родительским узлам
+        # 5. Формирование обогащенных источников
         sources: list[RagSourceChunkSchema] = []
 
         for point in filtered_points:
@@ -202,33 +203,31 @@ class Retriever:
 
             node_id = str(point.payload.get("node_id", ""))
             parent_node = nodes_map.get(node_id) if node_id else None
-            if parent_node:
-                quote_text = parent_node.content_markdown
-                if quote_text and len(quote_text) > 6000:
-                    quote_text = (
-                        quote_text[:6000]
-                        + "\n\n[... Текст родительского раздела сокращен для оптимизации контекста ...]"
-                    )
-                section_path = parent_node.section_path
-                title = parent_node.title or section_path
-                doc_id = str(parent_node.doc_id)
-            else:
-                quote_text = point.payload.get("text")
-                if quote_text and len(quote_text) > 6000:
-                    quote_text = (
-                        quote_text[:6000]
-                        + "\n\n[... Текст фрагмента сокращен для оптимизации контекста ...]"
-                    )
-                section_path = point.payload.get("section_path")
-                title = (
-                    point.payload.get("title")
-                    or section_path
-                    or "Нормативный регламент"
+            quote_text = point.payload.get("text") or ""
+            if len(quote_text) > 6000:
+                quote_text = (
+                    quote_text[:6000]
+                    + "\n\n[... Текст фрагмента сокращен для оптимизации контекста ...]"
                 )
-                doc_id = str(
-                    point.payload.get("document_id")
-                    or point.payload.get("doc_id", "")
-                )
+            section_path = point.payload.get("section_path") or (
+                parent_node.section_path if parent_node else None
+            )
+            title = (
+                point.payload.get("title")
+                or (parent_node.title if parent_node else None)
+                or section_path
+                or "Нормативный регламент"
+            )
+            doc_id = str(
+                point.payload.get("document_id")
+                or point.payload.get("doc_id", "")
+                or (parent_node.doc_id if parent_node else "")
+            )
+
+            parent_full_content = (
+                parent_node.full_content if parent_node else None
+            )
+            parent_title = parent_node.title if parent_node else None
 
             sources.append(
                 RagSourceChunkSchema(
@@ -240,7 +239,142 @@ class Retriever:
                     section_path=section_path,
                     source_url=point.payload.get("source_url"),
                     relevance_score=point.score,
+                    parent_title=parent_title,
+                    parent_full_content=parent_full_content,
+                    highlight_quote=quote_text,
                 )
             )
 
         return sources
+
+
+async def hydrate_parent_articles(
+    sources: list[RagSourceChunkSchema],
+    session: Any = None,
+    max_parent_chars: int = 5000,
+) -> list[RagSourceChunkSchema]:
+    """Выполняет гидратацию родительских статей (Small-to-Big) из PostgreSQL (kb_nodes).
+
+    Для источников с is_parent=True и заполненным node_id:
+    - Извлекает full_content, title, section_path, table_md из kb_nodes.
+    - Сохраняет parent_full_content и parent_title для интерактивного просмотра на Frontend.
+    - Рассчитывает символьные смещения highlight_offset (start, end) для подсветки цитаты в шторке.
+    - Устанавливает quote_text равным родительскому контенту (с адаптивным окном при превышении лимита)
+      для передачи в генератор ответов LLM.
+    """
+    if not sources:
+        return []
+
+    parent_node_ids = [
+        s.node_id
+        for s in sources
+        if getattr(s, "is_parent", False) and s.node_id
+    ]
+    if not parent_node_ids:
+        return sources
+
+    nodes_map: dict[str, Any] = {}
+    try:
+        if session is not None:
+            res = await session.execute(
+                text(
+                    "SELECT node_id, full_content, section_path, title, doc_id, table_md "
+                    "FROM kb_nodes WHERE node_id = ANY(:node_ids)"
+                ),
+                {"node_ids": parent_node_ids},
+            )
+            for row in res:
+                nodes_map[str(row.node_id)] = row
+        else:
+            async with async_session_maker() as sess:
+                res = await sess.execute(
+                    text(
+                        "SELECT node_id, full_content, section_path, title, doc_id, table_md "
+                        "FROM kb_nodes WHERE node_id = ANY(:node_ids)"
+                    ),
+                    {"node_ids": parent_node_ids},
+                )
+                for row in res:
+                    nodes_map[str(row.node_id)] = row
+    except Exception as exc:
+        logger.debug("hydrate_parent_articles fallback: %s", exc)
+
+    hydrated_sources: list[RagSourceChunkSchema] = []
+    for source in sources:
+        if (
+            getattr(source, "is_parent", False)
+            and source.node_id
+            and source.node_id in nodes_map
+        ):
+            row = nodes_map[source.node_id]
+            full_content = row.full_content or ""
+            quote = source.highlight_quote or source.quote_text or ""
+
+            # Вычисляем смещение цитаты в родительском документе
+            highlight_offset = None
+            if quote and quote in full_content:
+                start_idx = full_content.find(quote)
+                highlight_offset = {
+                    "start": start_idx,
+                    "end": start_idx + len(quote),
+                }
+            elif quote:
+                # Поиск первого ключевого предложения
+                first_sentence = quote.split(".")[0].strip()
+                if len(first_sentence) > 15 and first_sentence in full_content:
+                    start_idx = full_content.find(first_sentence)
+                    highlight_offset = {
+                        "start": start_idx,
+                        "end": start_idx + len(first_sentence),
+                    }
+
+            # Адаптивное окно контекста для промпта LLM
+            context_text = full_content
+            if len(context_text) > max_parent_chars:
+                if highlight_offset:
+                    mid = highlight_offset["start"]
+                    half = max_parent_chars // 2
+                    w_start = max(0, mid - half)
+                    w_end = min(len(full_content), mid + half)
+                    prefix = (
+                        "[... Текст статьи сокращен ...]\n\n"
+                        if w_start > 0
+                        else ""
+                    )
+                    suffix = (
+                        "\n\n[... Текст статьи сокращен ...]"
+                        if w_end < len(full_content)
+                        else ""
+                    )
+                    context_text = (
+                        prefix + full_content[w_start:w_end] + suffix
+                    )
+                else:
+                    context_text = (
+                        full_content[:max_parent_chars]
+                        + "\n\n[... Текст родительской статьи сокращен для оптимизации контекста ...]"
+                    )
+
+            hydrated_chunk = source.model_copy(
+                update={
+                    "parent_title": row.title or source.title,
+                    "parent_full_content": full_content,
+                    "quote_text": context_text,
+                    "section_path": row.section_path or source.section_path,
+                    "title": row.title or source.title,
+                    "highlight_quote": quote,
+                    "highlight_offset": highlight_offset,
+                }
+            )
+            hydrated_sources.append(hydrated_chunk)
+        else:
+            hydrated_sources.append(
+                source.model_copy(
+                    update={
+                        "highlight_quote": source.highlight_quote
+                        or source.quote_text,
+                    }
+                )
+            )
+
+    return hydrated_sources

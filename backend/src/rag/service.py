@@ -12,7 +12,7 @@ from src.rag.reranker import (
     LexicalDenseReranker,
     TransformerCrossEncoderReranker,
 )
-from src.rag.retriever import Retriever
+from src.rag.retriever import Retriever, hydrate_parent_articles
 from src.rag.schemas import (
     ContextChunk,
     RagDegradedModeEventSchema,
@@ -108,6 +108,9 @@ class RagService:
                 sources=[],
             )
             return
+
+        # 3.1. Гидратация родительских статей из PostgreSQL (Small-to-Big)
+        chunks = await hydrate_parent_articles(chunks)
 
         yield RagSourcesEventSchema(sources=chunks)
         await asyncio.sleep(0.01)

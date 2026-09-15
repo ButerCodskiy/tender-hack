@@ -105,6 +105,26 @@ class RagSourceChunkSchema(BaseModel):
         default=False,
         description="Флаг приоритетного закрепления нормативной статьи в топ-1 выдачи",
     )
+    is_parent: bool = Field(
+        default=False,
+        description="Флаг развертывания фрагмента как полноценного родительского документа (Small-to-Big)",
+    )
+    parent_title: str | None = Field(
+        default=None,
+        description="Заголовок родительской статьи или раздела",
+    )
+    parent_full_content: str | None = Field(
+        default=None,
+        description="Полный текст родительской статьи из kb_nodes для интерактивного просмотра",
+    )
+    highlight_quote: str | None = Field(
+        default=None,
+        description="Точная цитата найденного чанка для визуальной подсветки в родительском документе",
+    )
+    highlight_offset: dict[str, int] | None = Field(
+        default=None,
+        description="Символьные смещения цитаты start и end внутри parent_full_content",
+    )
 
     @property
     def score(self) -> float:
