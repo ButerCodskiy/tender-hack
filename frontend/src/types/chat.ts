@@ -6,6 +6,11 @@ export interface Citation {
   sectionPath?: string;
   excerpt?: string;
   url?: string;
+  isParent?: boolean;
+  parentTitle?: string;
+  parentFullContent?: string;
+  highlightQuote?: string;
+  highlightOffset?: { start: number; end: number };
 }
 
 export type MessageSenderType = 'client' | 'bot' | 'operator' | 'system' | 'admin';

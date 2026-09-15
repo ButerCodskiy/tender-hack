@@ -12,9 +12,11 @@ import {
   Headphones,
   AlertTriangle,
   ShieldCheck,
+  ExternalLink,
 } from 'lucide-react';
-import { Message } from '../../types/chat';
+import { Message, Citation } from '../../types/chat';
 import { MarkdownView } from '../common/MarkdownView';
+import { SourceViewerDrawer } from './SourceViewerDrawer';
 
 interface ChatMessageProps {
   message: Message;
@@ -41,6 +43,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
   const [feedbackGiven, setFeedbackGiven] = useState<'positive' | 'negative' | null>(null);
+  const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
 
   const handleCopy = async () => {
     try {
@@ -290,30 +293,54 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         {/* RAG Citations */}
         {message.citations && message.citations.length > 0 && (
           <div className="mt-3 pt-3 border-t border-[#e5e5e5] space-y-2">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-[#264b82]">
-              <BookOpen className="size-3.5 text-[#264b82]" />
-              <span>Источники из регламентов:</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-[#264b82] dark:text-sky-400">
+                <BookOpen className="size-3.5 text-[#264b82] dark:text-sky-400" />
+                <span>Источники из регламентов:</span>
+              </div>
+              <span className="text-[10px] text-[#718096] dark:text-gray-400">
+                Нажмите для просмотра статьи
+              </span>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               {message.citations.map((citation) => (
-                <div
+                <button
                   key={citation.id}
-                  className="p-2.5 rounded-none bg-[#f7f8f9] border border-[#dddddd] text-xs hover:border-[#264b82] transition"
+                  type="button"
+                  onClick={() => setSelectedCitation(citation)}
+                  className="w-full text-left p-2.5 rounded-lg bg-[#f8fafc] dark:bg-gray-800/60 border border-[#e2e8f0] dark:border-gray-700 hover:border-[#264b82] hover:bg-[#ebf8ff] dark:hover:bg-gray-800 transition cursor-pointer group shadow-sm flex flex-col justify-between"
                 >
-                  <span className="font-bold text-[#1a1a1a] block truncate">
-                    {citation.title}
-                  </span>
-                  {citation.sectionPath && (
-                    <span className="text-[11px] text-[#7f8792] block truncate mt-0.5">
-                      {citation.sectionPath}
-                    </span>
-                  )}
-                  {citation.excerpt && (
-                    <p className="text-[11px] text-[#555555] italic mt-1 line-clamp-2">
-                      «{citation.excerpt}»
-                    </p>
-                  )}
-                </div>
+                  <div>
+                    <div className="flex items-center justify-between gap-1.5 mb-1">
+                      <span className="font-bold text-xs text-[#1a202c] dark:text-white truncate group-hover:text-[#264b82] dark:group-hover:text-sky-400 transition">
+                        {citation.parentTitle || citation.title}
+                      </span>
+                      {citation.isParent ? (
+                        <span className="shrink-0 px-1.5 py-0.5 text-[9px] font-semibold bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 rounded border border-indigo-200 dark:border-indigo-800">
+                          Статья
+                        </span>
+                      ) : (
+                        <span className="shrink-0 px-1.5 py-0.5 text-[9px] font-medium bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300 rounded">
+                          Чанк
+                        </span>
+                      )}
+                    </div>
+                    {citation.sectionPath && (
+                      <span className="text-[11px] text-[#718096] dark:text-gray-400 block truncate">
+                        {citation.sectionPath}
+                      </span>
+                    )}
+                    {citation.excerpt && (
+                      <p className="text-[11px] text-[#4a5568] dark:text-gray-300 italic mt-1 line-clamp-2">
+                        «{citation.excerpt}»
+                      </p>
+                    )}
+                  </div>
+                  <div className="mt-2 pt-1 border-t border-[#edf2f7] dark:border-gray-700/60 flex items-center justify-between text-[11px] text-[#264b82] dark:text-sky-400 font-medium">
+                    <span>Открыть документ</span>
+                    <ExternalLink className="size-3 group-hover:translate-x-0.5 transition-transform" />
+                  </div>
+                </button>
               ))}
             </div>
           </div>
@@ -443,6 +470,13 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           </div>
         )}
       </div>
+
+      {/* Интерактивная боковая шторка просмотра статьи */}
+      <SourceViewerDrawer
+        isOpen={!!selectedCitation}
+        citation={selectedCitation}
+        onClose={() => setSelectedCitation(null)}
+      />
     </div>
   );
 };

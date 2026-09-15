@@ -215,17 +215,17 @@ export async function streamChatMessage(
                 } else if (currentEvent === 'sources') {
                   if (data.sources && Array.isArray(data.sources)) {
                     const citations: Citation[] = data.sources.map(
-                      (src: {
-                        chunk_id?: string;
-                        doc_id?: string;
-                        title?: string;
-                        section_path?: string;
-                        quote_text?: string;
-                      }, idx: number) => ({
+                      (src: any, idx: number) => ({
                         id: src.chunk_id || `src-${idx}`,
-                        title: src.title || src.doc_id || 'Регламент Портала',
+                        title: src.parent_title || src.title || src.doc_id || 'Регламент Портала',
                         sectionPath: src.section_path || src.doc_id,
-                        excerpt: src.quote_text,
+                        excerpt: src.highlight_quote || src.quote_text,
+                        url: src.source_url,
+                        isParent: src.is_parent ?? false,
+                        parentTitle: src.parent_title,
+                        parentFullContent: src.parent_full_content,
+                        highlightQuote: src.highlight_quote,
+                        highlightOffset: src.highlight_offset,
                       })
                     );
                     callbacks.onSources?.(citations);
@@ -249,20 +249,17 @@ export async function streamChatMessage(
                 } else if (currentEvent === 'degraded_mode') {
                   if (data.sources && Array.isArray(data.sources)) {
                     const citations: Citation[] = data.sources.map(
-                      (
-                        src: {
-                          chunk_id?: string;
-                          doc_id?: string;
-                          title?: string;
-                          section_path?: string;
-                          quote_text?: string;
-                        },
-                        idx: number
-                      ) => ({
+                      (src: any, idx: number) => ({
                         id: src.chunk_id || `src-${idx}`,
-                        title: src.title || src.doc_id || 'Регламент Портала',
+                        title: src.parent_title || src.title || src.doc_id || 'Регламент Портала',
                         sectionPath: src.section_path || src.doc_id,
-                        excerpt: src.quote_text,
+                        excerpt: src.highlight_quote || src.quote_text,
+                        url: src.source_url,
+                        isParent: src.is_parent ?? false,
+                        parentTitle: src.parent_title,
+                        parentFullContent: src.parent_full_content,
+                        highlightQuote: src.highlight_quote,
+                        highlightOffset: src.highlight_offset,
                       })
                     );
                     callbacks.onSources?.(citations);
