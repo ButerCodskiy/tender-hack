@@ -79,9 +79,24 @@ class RedisChatContext:
         items = await self.redis.lrange(f"chat:context:{ticket_id}", 0, -1)
         return [json.loads(item) for item in items]
 
+    async def increment_security_violations(self, ticket_id: UUID | str) -> int:
+        """Инкрементирует счетчик нарушений безопасности обращения в Redis."""
+        key = f"chat:violations:{ticket_id}"
+        count = await self.redis.incr(key)
+        await self.redis.expire(key, settings.CHAT_CONTEXT_TTL_SECONDS)
+        return int(count)
+
+    async def get_security_violations(self, ticket_id: UUID | str) -> int:
+        """Возвращает количество зафиксированных нарушений безопасности для тикета."""
+        val = await self.redis.get(f"chat:violations:{ticket_id}")
+        return int(val) if val else 0
+
     async def clear_context(self, ticket_id: UUID | str) -> None:
-        """Удаляет ключ оперативного контекста при завершении обращения."""
-        await self.redis.delete(f"chat:context:{ticket_id}")
+        """Удаляет ключ оперативного контекста и счетчик нарушений при завершении обращения."""
+        await self.redis.delete(
+            f"chat:context:{ticket_id}",
+            f"chat:violations:{ticket_id}",
+        )
 
     async def get_ttl(self, ticket_id: UUID | str) -> int:
         """Возвращает оставшееся время жизни ключа контекста в секундах."""

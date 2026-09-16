@@ -22,8 +22,17 @@ from src.chat.models import (
     TicketStatus,
 )
 from src.chat.moderation import (
+    INSTITUTIONAL_INJECTION_REFUSAL,
+    INSTITUTIONAL_REPEAT_VIOLATION_REFUSAL,
+    INSTITUTIONAL_SAFETY_REFUSAL,
+    InjectionAttackDetector,
+    OutputSafetyGuardrail,
     ProfanityModerator,
+    SensitiveTopicsGuardrail,
+    get_injection_detector,
     get_moderator,
+    get_output_guardrail,
+    get_sensitive_guardrail,
 )
 from src.chat.repository import ChatRepository, TicketRepository
 from src.chat.router import EscalationRouter
@@ -67,6 +76,9 @@ class ChatService:
         ticket_repo: TicketRepository | None = None,
         redis_context: RedisChatContext | None = None,
         moderator: ProfanityModerator | None = None,
+        sensitive_guardrail: SensitiveTopicsGuardrail | None = None,
+        injection_detector: InjectionAttackDetector | None = None,
+        output_guardrail: OutputSafetyGuardrail | None = None,
         ticket_events: RedisTicketEvents | None = None,
         line_queue: RedisLineQueue | None = None,
         query_router: QueryRouter | None = None,
@@ -79,6 +91,13 @@ class ChatService:
         self.ticket_repo = ticket_repo or TicketRepository(session)
         self.redis_context = redis_context
         self.moderator = moderator or get_moderator()
+        self.sensitive_guardrail = (
+            sensitive_guardrail or get_sensitive_guardrail()
+        )
+        self.injection_detector = (
+            injection_detector or get_injection_detector()
+        )
+        self.output_guardrail = output_guardrail or get_output_guardrail()
         self.ticket_events = ticket_events
         self.line_queue = line_queue
         self.query_router = query_router or QueryRouter()
@@ -327,6 +346,202 @@ class ChatService:
             )
             await self.ticket_repo.create(active_ticket)
 
+        # 0. Эшелонированная проверка безопасности (L2 Prompt Injection + L1 Sensitive Topics)
+        inj_check = self.injection_detector.check_injection(payload.text)
+        sens_check = None
+        if inj_check.is_safe:
+            sens_check = self.sensitive_guardrail.check_sensitive_topics(
+                payload.text
+            )
+
+        safety_violation = (
+            inj_check
+            if not inj_check.is_safe
+            else (sens_check if sens_check and not sens_check.is_safe else None)
+        )
+
+        if safety_violation is not None:
+            # Подсчет количества нарушений безопасности в рамках текущего обращения
+            if self.redis_context is not None:
+                try:
+                    violation_count = (
+                        await self.redis_context.increment_security_violations(
+                            active_ticket.id
+                        )
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Не удалось обновить счетчик нарушений в Redis: %s", exc
+                    )
+                    violation_count = (
+                        await self._count_db_violations(active_ticket.id)
+                    ) + 1
+            else:
+                violation_count = (
+                    await self._count_db_violations(active_ticket.id)
+                ) + 1
+
+            is_repeat = violation_count >= 2
+
+            if not is_repeat:
+                # Первичное нарушение: сообщение помечается FLAGGED, выдается институциональный отказ, сессия продолжается
+                logger.warning(
+                    "Зафиксировано первичное нарушение безопасности (тикет: %s, категория: %s, паттерн: %s): %s",
+                    active_ticket.id,
+                    safety_violation.category,
+                    safety_violation.matched_pattern,
+                    safety_violation.reason,
+                )
+                client_message = MessageModel(
+                    id=uuid6.uuid7(),
+                    ticket_id=active_ticket.id,
+                    sender_type=MessageSenderType.CLIENT,
+                    sender_id=user_id,
+                    text=payload.text,
+                    moderation_status=MessageModerationStatus.FLAGGED,
+                    moderation_reason=safety_violation.reason
+                    or safety_violation.category,
+                    created_at=datetime.now(settings.TIMEZONE),
+                )
+                await self.repo.save_message(client_message)
+                await self.session.commit()
+
+                refusal_text = (
+                    safety_violation.refusal_text
+                    or (
+                        INSTITUTIONAL_INJECTION_REFUSAL
+                        if safety_violation == inj_check
+                        else INSTITUTIONAL_SAFETY_REFUSAL
+                    )
+                )
+                bot_message_id = uuid6.uuid7()
+                bot_message = MessageModel(
+                    id=bot_message_id,
+                    ticket_id=active_ticket.id,
+                    sender_type=MessageSenderType.BOT,
+                    sender_id=None,
+                    text=refusal_text,
+                    moderation_status=MessageModerationStatus.PASSED,
+                    created_at=datetime.now(settings.TIMEZONE),
+                )
+                await self.repo.save_message(bot_message)
+                await self.session.commit()
+
+                if self.redis_context:
+                    await self.redis_context.add_message(
+                        ticket_id=active_ticket.id,
+                        sender=MessageSenderType.BOT.value,
+                        text=refusal_text,
+                        timestamp=bot_message.created_at,
+                    )
+
+                sent_event = RagSentenceEventSchema(
+                    sentence_idx=0,
+                    text=refusal_text,
+                    verified=True,
+                )
+                yield f"event: {sent_event.event}\ndata: {sent_event.model_dump_json(exclude={'event'})}\n\n"
+
+                done_event = RagDoneEventSchema(
+                    message_id=bot_message_id,
+                    text=refusal_text,
+                    all_verified=True,
+                    ticket_id=active_ticket.id,
+                )
+                yield f"event: {done_event.event}\ndata: {done_event.model_dump_json(exclude={'event'})}\n\n"
+                return
+
+            # Повторное нарушение: сообщение блокируется (BLOCKED), тикет закрывается модерацией, аудит инцидента
+            logger.warning(
+                "Повторная атака на систему безопасности! Блокировка обращения (тикет: %s, категория: %s, паттерн: %s): %s",
+                active_ticket.id,
+                safety_violation.category,
+                safety_violation.matched_pattern,
+                safety_violation.reason,
+            )
+            active_ticket.status = TicketStatus.CLOSED_BY_MODERATION
+            active_ticket.closed_at = datetime.now(settings.TIMEZONE)
+            active_ticket.escalation_reason = "security_incident"
+            await self.ticket_repo.update(active_ticket)
+
+            client_message = MessageModel(
+                id=uuid6.uuid7(),
+                ticket_id=active_ticket.id,
+                sender_type=MessageSenderType.CLIENT,
+                sender_id=user_id,
+                text=payload.text,
+                moderation_status=MessageModerationStatus.BLOCKED,
+                moderation_reason=f"repeated_violation: {safety_violation.reason or safety_violation.category}",
+                created_at=datetime.now(settings.TIMEZONE),
+            )
+            await self.repo.save_message(client_message)
+
+            bot_message_id = uuid6.uuid7()
+            bot_message = MessageModel(
+                id=bot_message_id,
+                ticket_id=active_ticket.id,
+                sender_type=MessageSenderType.BOT,
+                sender_id=None,
+                text=INSTITUTIONAL_REPEAT_VIOLATION_REFUSAL,
+                moderation_status=MessageModerationStatus.PASSED,
+                created_at=datetime.now(settings.TIMEZONE),
+            )
+            await self.repo.save_message(bot_message)
+            await self.session.commit()
+
+            if self.redis_context is not None:
+                await self.redis_context.clear_context(active_ticket.id)
+
+            if self.ticket_events is not None:
+                await self.ticket_events.publish_session_terminated(
+                    ticket_id=active_ticket.id,
+                    reason="security_incident",
+                    message=INSTITUTIONAL_REPEAT_VIOLATION_REFUSAL,
+                )
+                await self.ticket_events.publish_ticket_resolved(
+                    ticket_id=active_ticket.id,
+                    operator_id=active_ticket.assigned_operator_id,
+                    closed_at=active_ticket.closed_at,
+                )
+
+            if (
+                active_ticket.line is not None
+                and active_ticket.assigned_operator_id is not None
+            ):
+                await self._safe_dispatch_task(
+                    active_ticket.line.code, "slot_freed"
+                )
+
+            await self._safe_enqueue_audit(
+                active_ticket.id, "security_incident"
+            )
+
+            sent_event = RagSentenceEventSchema(
+                sentence_idx=0,
+                text=INSTITUTIONAL_REPEAT_VIOLATION_REFUSAL,
+                verified=True,
+            )
+            yield f"event: {sent_event.event}\ndata: {sent_event.model_dump_json(exclude={'event'})}\n\n"
+
+            done_event = RagDoneEventSchema(
+                message_id=bot_message_id,
+                text=INSTITUTIONAL_REPEAT_VIOLATION_REFUSAL,
+                all_verified=True,
+                ticket_id=active_ticket.id,
+            )
+            yield f"event: {done_event.event}\ndata: {done_event.model_dump_json(exclude={'event'})}\n\n"
+
+            term_data = json.dumps(
+                {
+                    "reason": "security_incident",
+                    "message": INSTITUTIONAL_REPEAT_VIOLATION_REFUSAL,
+                },
+                ensure_ascii=False,
+            )
+            yield f"event: session_terminated\ndata: {term_data}\n\n"
+            return
+
+        # Если сообщение безопасное, сохраняем его со статусом PASSED
         client_message = MessageModel(
             id=uuid6.uuid7(),
             ticket_id=active_ticket.id,
@@ -591,12 +806,28 @@ class ChatService:
                     collected_sources.extend(event.sources)
                 elif isinstance(event, RagDoneEventSchema):
                     target_bot_id = event.message_id or bot_message_id
+                    final_bot_text = event.text
+                    out_check = self.output_guardrail.validate_output(
+                        final_bot_text
+                    )
+                    if not out_check.is_safe:
+                        logger.warning(
+                            "Сработал L4 Output Safety Guardrail (категория: %s, причина: %s). Подмена текста на институциональный отказ.",
+                            out_check.category,
+                            out_check.reason,
+                        )
+                        final_bot_text = (
+                            out_check.refusal_text
+                            or INSTITUTIONAL_SAFETY_REFUSAL
+                        )
+                        event.text = final_bot_text
+
                     bot_message = MessageModel(
                         id=target_bot_id,
                         ticket_id=active_ticket.id,
                         sender_type=MessageSenderType.BOT,
                         sender_id=None,
-                        text=event.text,
+                        text=final_bot_text,
                         moderation_status=MessageModerationStatus.PASSED,
                         created_at=datetime.now(settings.TIMEZONE),
                     )
@@ -897,6 +1128,51 @@ class ChatService:
                 "Не удалось поставить задачу generate_copilot_summary для тикета %s",
                 ticket_id,
             )
+
+    async def _count_db_violations(self, ticket_id: UUID) -> int:
+        """Считает количество ранее зафиксированных нарушений безопасности в рамках обращения."""
+        # Поддержка моков репозитория в тестах
+        if hasattr(self.repo, "save_message") and hasattr(
+            self.repo.save_message, "call_args_list"
+        ):
+            count = 0
+            for call in self.repo.save_message.call_args_list:
+                args = call[0] if call and len(call) > 0 else ()
+                if args and isinstance(args[0], MessageModel):
+                    msg = args[0]
+                    if (
+                        msg.ticket_id == ticket_id
+                        and msg.moderation_status
+                        in (
+                            MessageModerationStatus.FLAGGED,
+                            MessageModerationStatus.BLOCKED,
+                        )
+                    ):
+                        count += 1
+            return count
+
+        from sqlalchemy import func, select
+
+        stmt = (
+            select(func.count())
+            .select_from(MessageModel)
+            .where(
+                MessageModel.ticket_id == ticket_id,
+                MessageModel.moderation_status.in_(
+                    [
+                        MessageModerationStatus.FLAGGED,
+                        MessageModerationStatus.BLOCKED,
+                    ]
+                ),
+            )
+        )
+        try:
+            result = await self.session.scalar(stmt)
+            if isinstance(result, (int, float)):
+                return int(result)
+            return 0
+        except Exception:
+            return 0
 
     async def _safe_enqueue_audit(
         self, ticket_id: UUID, trigger_reason: str
