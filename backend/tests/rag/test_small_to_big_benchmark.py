@@ -520,7 +520,6 @@ class MockKnowledgeBaseEngine:
 
         return candidates
 
-
     def simulate_big_chunk_search(
         self, bq: BenchmarkQuery
     ) -> list[ContextChunk]:
@@ -553,7 +552,10 @@ class MockKnowledgeBaseEngine:
         # Эффект размытия: для точечных запросов (ошибки, конкретные цифры, пункты)
         # скор крупной статьи снижается, и вперед выходят общие статьи-дистракторы
         is_pinpoint = bq.category in ("error_code", "44fz", "portal_mos") and (
-            "0x" in bq.query or "%" in bq.query or "ст." in bq.query.lower() or "срок" in bq.query.lower()
+            "0x" in bq.query
+            or "%" in bq.query
+            or "ст." in bq.query.lower()
+            or "срок" in bq.query.lower()
         )
         target_score = 0.58 if is_pinpoint else 0.78
 
@@ -586,7 +588,9 @@ class MockKnowledgeBaseEngine:
                 )
             )
 
-        return sorted(candidates, key=lambda c: c.relevance_score or 0.0, reverse=True)
+        return sorted(
+            candidates, key=lambda c: c.relevance_score or 0.0, reverse=True
+        )
 
 
 def run_benchmark_strategy(strategy: str) -> dict[str, Any]:
@@ -638,7 +642,9 @@ def run_benchmark_strategy(strategy: str) -> dict[str, Any]:
                 if item.is_parent and item.node_id in engine._corpus:
                     hydrated = item.model_copy(
                         update={
-                            "quote_text": engine._corpus[item.node_id]["parent_full_content"]
+                            "quote_text": engine._corpus[item.node_id][
+                                "parent_full_content"
+                            ]
                         }
                     )
                     final_sources.append(hydrated)

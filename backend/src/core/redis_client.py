@@ -79,7 +79,9 @@ class RedisChatContext:
         items = await self.redis.lrange(f"chat:context:{ticket_id}", 0, -1)
         return [json.loads(item) for item in items]
 
-    async def increment_security_violations(self, ticket_id: UUID | str) -> int:
+    async def increment_security_violations(
+        self, ticket_id: UUID | str
+    ) -> int:
         """Инкрементирует счетчик нарушений безопасности обращения в Redis."""
         key = f"chat:violations:{ticket_id}"
         count = await self.redis.incr(key)

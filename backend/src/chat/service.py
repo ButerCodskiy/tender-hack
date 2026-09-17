@@ -357,7 +357,9 @@ class ChatService:
         safety_violation = (
             inj_check
             if not inj_check.is_safe
-            else (sens_check if sens_check and not sens_check.is_safe else None)
+            else (
+                sens_check if sens_check and not sens_check.is_safe else None
+            )
         )
 
         if safety_violation is not None:
@@ -371,7 +373,8 @@ class ChatService:
                     )
                 except Exception as exc:
                     logger.warning(
-                        "Не удалось обновить счетчик нарушений в Redis: %s", exc
+                        "Не удалось обновить счетчик нарушений в Redis: %s",
+                        exc,
                     )
                     violation_count = (
                         await self._count_db_violations(active_ticket.id)
@@ -406,13 +409,10 @@ class ChatService:
                 await self.repo.save_message(client_message)
                 await self.session.commit()
 
-                refusal_text = (
-                    safety_violation.refusal_text
-                    or (
-                        INSTITUTIONAL_INJECTION_REFUSAL
-                        if safety_violation == inj_check
-                        else INSTITUTIONAL_SAFETY_REFUSAL
-                    )
+                refusal_text = safety_violation.refusal_text or (
+                    INSTITUTIONAL_INJECTION_REFUSAL
+                    if safety_violation == inj_check
+                    else INSTITUTIONAL_SAFETY_REFUSAL
                 )
                 bot_message_id = uuid6.uuid7()
                 bot_message = MessageModel(

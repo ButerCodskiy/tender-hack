@@ -411,7 +411,9 @@ class SensitiveTopicsGuardrail:
         normalized = self._moderator.normalize(text)
 
         # 1. Проверка самоповреждения / суицида (наивысший приоритет, блокируется безусловно)
-        m = self._re_self_harm.search(normalized) or self._re_self_harm.search(text)
+        m = self._re_self_harm.search(normalized) or self._re_self_harm.search(
+            text
+        )
         if m:
             return SafetyCheckResult(
                 is_safe=False,
@@ -422,7 +424,9 @@ class SensitiveTopicsGuardrail:
             )
 
         # 2. Проверка оружия и взрывчатки (безусловная блокировка)
-        m = self._re_weapons_extremism.search(normalized) or self._re_weapons_extremism.search(text)
+        m = self._re_weapons_extremism.search(
+            normalized
+        ) or self._re_weapons_extremism.search(text)
         if m:
             return SafetyCheckResult(
                 is_safe=False,
@@ -444,7 +448,9 @@ class SensitiveTopicsGuardrail:
             )
 
         # 4. Проверка киберпреступлений (безусловная блокировка)
-        m = self._re_cybercrime.search(normalized) or self._re_cybercrime.search(text)
+        m = self._re_cybercrime.search(
+            normalized
+        ) or self._re_cybercrime.search(text)
         if m:
             return SafetyCheckResult(
                 is_safe=False,
@@ -464,7 +470,9 @@ class SensitiveTopicsGuardrail:
             return SafetyCheckResult(is_safe=True)
 
         # 5. Проверка медицинских консультаций / диагнозов (вне контекста закупок)
-        m = self._re_medical_advice.search(normalized) or self._re_medical_advice.search(text)
+        m = self._re_medical_advice.search(
+            normalized
+        ) or self._re_medical_advice.search(text)
         if m:
             return SafetyCheckResult(
                 is_safe=False,
@@ -475,7 +483,9 @@ class SensitiveTopicsGuardrail:
             )
 
         # 6. Проверка политики и геополитики (вне контекста закупок)
-        m = self._re_politics.search(normalized) or self._re_politics.search(text)
+        m = self._re_politics.search(normalized) or self._re_politics.search(
+            text
+        )
         if m:
             return SafetyCheckResult(
                 is_safe=False,
@@ -486,7 +496,9 @@ class SensitiveTopicsGuardrail:
             )
 
         # 7. Проверка религиозных споров (вне контекста закупок)
-        m = self._re_religion.search(normalized) or self._re_religion.search(text)
+        m = self._re_religion.search(normalized) or self._re_religion.search(
+            text
+        )
         if m:
             return SafetyCheckResult(
                 is_safe=False,
@@ -536,11 +548,31 @@ class InjectionAttackDetector:
             return SafetyCheckResult(is_safe=True)
 
         for pattern, cat, reason in [
-            (self._re_delimiters, "PROMPT_INJECTION", "Structural tag injection detected"),
-            (self._re_ignore_commands, "PROMPT_INJECTION", "Instruction override directive detected"),
-            (self._re_jailbreak_personas, "JAILBREAK", "Jailbreak / DAN persona trigger detected"),
-            (self._re_prompt_leaks, "PROMPT_LEAK", "System prompt extraction attempt detected"),
-            (self._re_new_rules, "PROMPT_INJECTION", "Adversarial rule imposition detected"),
+            (
+                self._re_delimiters,
+                "PROMPT_INJECTION",
+                "Structural tag injection detected",
+            ),
+            (
+                self._re_ignore_commands,
+                "PROMPT_INJECTION",
+                "Instruction override directive detected",
+            ),
+            (
+                self._re_jailbreak_personas,
+                "JAILBREAK",
+                "Jailbreak / DAN persona trigger detected",
+            ),
+            (
+                self._re_prompt_leaks,
+                "PROMPT_LEAK",
+                "System prompt extraction attempt detected",
+            ),
+            (
+                self._re_new_rules,
+                "PROMPT_INJECTION",
+                "Adversarial rule imposition detected",
+            ),
         ]:
             m = pattern.search(text)
             if m:
@@ -558,7 +590,9 @@ class InjectionAttackDetector:
 class OutputSafetyGuardrail:
     """Выходной фильтр для контроля сгенерированных моделью ответов до отправки клиенту."""
 
-    def __init__(self, sensitive_guard: SensitiveTopicsGuardrail | None = None) -> None:
+    def __init__(
+        self, sensitive_guard: SensitiveTopicsGuardrail | None = None
+    ) -> None:
         self._sensitive_guard = sensitive_guard or SensitiveTopicsGuardrail()
         self._re_dan_affirmation = re.compile(
             r"(?:I\s+am\s+DAN|As\s+an\s+unrestricted\s+AI|Я\s+теперь\s+DAN|Я\s+свободный\s+ИИ)",
@@ -621,4 +655,3 @@ def get_output_guardrail() -> OutputSafetyGuardrail:
     if _output_guardrail is None:
         _output_guardrail = OutputSafetyGuardrail()
     return _output_guardrail
-

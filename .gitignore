@@ -262,3 +262,16 @@ ehthumbs_vista.db
 [Dd]esktop.ini
 $RECYCLE.BIN/
 *.stackdump
+
+# Internal agent specs, tracking, scratch files & drafts
+/ADR_RERANKER.md
+/AGENTS.md
+/frontend/AGENTS.md
+/CONTEXT-MAP.md
+/implementation_plan.md
+/README.md
+/.scratch/
+/scratch/
+/scripts/ast_of_project.md
+/scripts/ast_skeleton.py
+skills-lock.json
